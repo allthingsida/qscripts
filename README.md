@@ -27,4 +27,4 @@ QScripts is written in C++ with IDA's SDK and therefore it should be deployed li
 * `<IDA_install_folder>/plugins`
 * `%APPDATA%\Hex-Rays/plugins`
 
-Since the plugin uses IDA's SDK and no other OS specific functions, the plugin should be compilable for macOS and Linux just fine. I only provide MS Windows binaries. Please check the [releases page](releases/).
+Since the plugin uses IDA's SDK and no other OS specific functions, the plugin should be compilable for macOS and Linux just fine. I only provide MS Windows binaries. Please check the [releases page](https://github.com/0xeb/ida-qscripts/releases).
