@@ -12,12 +12,12 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LocalDebuggerCommand>$(MSBuildProjectDirectory)\..\..\bin\ida.exe</LocalDebuggerCommand>
-    <LocalDebuggerCommandArguments>-t</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>c:\temp\x.idb</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LocalDebuggerCommand>$(MSBuildProjectDirectory)\..\..\bin\ida.exe</LocalDebuggerCommand>
-    <LocalDebuggerCommandArguments>-t</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>c:\temp\x.idb</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
 </Project>
