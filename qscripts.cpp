@@ -52,7 +52,7 @@ struct script_exec_options_t
 };
 
 //-------------------------------------------------------------------------
-// non-modal call instruction chooser
+// Non-modal scripts chooser
 struct scripts_chooser_t: public chooser_t
 {
 protected:
@@ -188,63 +188,63 @@ protected:
     }
 
     // Rebuilds the scripts list while maintaining the active script when possible
-	ssize_t build_scripts_list(const char *find_script = nullptr)
-	{
-		// Remember active script and invalidate its index
-		qstring active_script;
-		bool has_active_script = m_nactive >= 0 && size_t(m_nactive) < m_scripts.size();
-		if (has_active_script)
-			active_script = m_scripts[m_nactive].script_file;
+    ssize_t build_scripts_list(const char *find_script = nullptr)
+    {
+        // Remember active script and invalidate its index
+        qstring active_script;
+        bool has_active_script = m_nactive >= 0 && size_t(m_nactive) < m_scripts.size();
+        if (has_active_script)
+            active_script = m_scripts[m_nactive].script_file;
 
-		m_nactive = -1;
+        m_nactive = -1;
 
-		// Read all scripts
-		qstrvec_t scripts_list;
-		reg_read_strlist(&scripts_list, IDAREG_RECENT_SCRIPTS);
+        // Read all scripts
+        qstrvec_t scripts_list;
+        reg_read_strlist(&scripts_list, IDAREG_RECENT_SCRIPTS);
 
-		// Rebuild the list
-		ssize_t idx = 0, find_idx = -1;
-		m_scripts.qclear();
-		for (auto &script_file: scripts_list)
-		{
-			// Restore active script
-			if (has_active_script && active_script == script_file)
-				m_nactive = idx;
+        // Rebuild the list
+        ssize_t idx = 0, find_idx = -1;
+        m_scripts.qclear();
+        for (auto &script_file: scripts_list)
+        {
+            // Restore active script
+            if (has_active_script && active_script == script_file)
+                m_nactive = idx;
 
-			// Optionally, find the index of a script by name
-			if (find_script != nullptr && streq(script_file.c_str(), find_script))
-				find_idx = idx;
+            // Optionally, find the index of a script by name
+            if (find_script != nullptr && streq(script_file.c_str(), find_script))
+                find_idx = idx;
 
-			add_script(script_file.c_str());
-			++idx;
-		}
-		return find_idx;
-	}
+            add_script(script_file.c_str());
+            ++idx;
+        }
+        return find_idx;
+    }
 
     // Save or load the options
     void saveload_options(bool bsave)
     {
-		struct int_options_t
-		{
-			const char *name;
-			int *pval;
-		} int_options [] =
-		{
-			{"QScripts_interval",         &m_options.change_interval},
-			{"QScripts_clearlog",         &m_options.clear_log},
-			{"QScripts_showscriptname",   &m_options.show_filename},
-			{"QScripts_exec_unload_func", &m_options.exec_unload_func},
-		};
+        struct int_options_t
+        {
+            const char *name;
+            int *pval;
+        } int_options [] =
+        {
+            {"QScripts_interval",         &m_options.change_interval},
+            {"QScripts_clearlog",         &m_options.clear_log},
+            {"QScripts_showscriptname",   &m_options.show_filename},
+            {"QScripts_exec_unload_func", &m_options.exec_unload_func},
+        };
 
-		for (auto &iopt: int_options)
-		{
-			if (bsave)
-				reg_write_int(iopt.name, *iopt.pval);
-			else
-				*iopt.pval = reg_read_int(iopt.name, *iopt.pval);
-		}
-		if (!bsave)
-			m_options.change_interval = normalize_filemon_interval(m_options.change_interval);
+        for (auto &iopt: int_options)
+        {
+            if (bsave)
+                reg_write_int(iopt.name, *iopt.pval);
+            else
+                *iopt.pval = reg_read_int(iopt.name, *iopt.pval);
+        }
+        if (!bsave)
+            m_options.change_interval = normalize_filemon_interval(m_options.change_interval);
     }
 
     static int idaapi s_filemon_timer_cb(void *ud)
@@ -266,7 +266,7 @@ protected:
             if (!get_file_modification_time(si.script_file.c_str(), cur_mtime))
             {
                 // Script no longer exists
-				m_nactive = -1;
+                m_nactive = -1;
                 msg("Active script '%s' no longer exists!\n", si.script_file.c_str());
                 break;
             }
@@ -315,8 +315,8 @@ protected:
             m_options.show_filename    = chk_opts.b_show_filename;
             m_options.exec_unload_func = chk_opts.b_exec_unload_func;
 
-			// Save the options directly
-			saveload_options(true);
+            // Save the options directly
+            saveload_options(true);
             return true;
         }
         return false;
@@ -362,17 +362,17 @@ protected:
         if (script_file == nullptr)
             return {};
 
-		reg_update_strlist(IDAREG_RECENT_SCRIPTS, script_file, IDA_MAX_RECENT_SCRIPTS);
-		ssize_t idx = build_scripts_list(script_file);
+        reg_update_strlist(IDAREG_RECENT_SCRIPTS, script_file, IDA_MAX_RECENT_SCRIPTS);
+        ssize_t idx = build_scripts_list(script_file);
         return cbret_t(qmax(idx, 0), chooser_base_t::ALL_CHANGED);
     }
 
     // Remove a script from the list
     cbret_t idaapi del(size_t n) override
     {
-		qstring script_file = m_scripts[n].script_file;
-		reg_update_strlist(IDAREG_RECENT_SCRIPTS, nullptr, IDA_MAX_RECENT_SCRIPTS, script_file.c_str());
-		build_scripts_list();
+        qstring script_file = m_scripts[n].script_file;
+        reg_update_strlist(IDAREG_RECENT_SCRIPTS, nullptr, IDA_MAX_RECENT_SCRIPTS, script_file.c_str());
+        build_scripts_list();
         return adjust_last_item(n);
     }
 
@@ -421,7 +421,7 @@ protected:
         // Load scripts and register the monitor
         //
         saveload_options(false);
-		build_scripts_list();
+        build_scripts_list();
 
         m_b_filemon_timer_paused = false;
         m_filemon_timer = register_timer(
@@ -481,9 +481,9 @@ static const char help[] =
     "\n";
 
 #ifdef _DEBUG
-static const char wanted_hotkey[] = "Alt-Shift-A";
+    static const char wanted_hotkey[] = "Alt-Shift-A";
 #else
-static const char wanted_hotkey[] = "Alt-Shift-F9";
+    static const char wanted_hotkey[] = "Alt-Shift-F9";
 #endif
 
 //--------------------------------------------------------------------------
@@ -493,20 +493,20 @@ static const char wanted_hotkey[] = "Alt-Shift-F9";
 //--------------------------------------------------------------------------
 plugin_t PLUGIN =
 {
-  IDP_INTERFACE_VERSION,
-  0,                    // plugin flags
-  init,                 // initialize
+    IDP_INTERFACE_VERSION,
+    0,                    // plugin flags
+    init,                 // initialize
 
-  term,                 // terminate. this pointer may be NULL.
+    term,                 // terminate. this pointer may be NULL.
 
-  run,                  // invoke plugin
+    run,                  // invoke plugin
 
-  comment,              // long comment about the plugin
+    comment,              // long comment about the plugin
                         // it could appear in the status line
                         // or as a hint
 
-  help,                 // multiline help about the plugin
+    help,                 // multiline help about the plugin
 
-  "QScripts", // the preferred short name of the plugin
-  wanted_hotkey         // the preferred hotkey to run the plugin
+    "QScripts",           // the preferred short name of the plugin
+    wanted_hotkey         // the preferred hotkey to run the plugin
 };
