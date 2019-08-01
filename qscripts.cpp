@@ -6,14 +6,15 @@ scripts in your favorite editor and execute them directly in IDA.
 
 (c) Elias Bachaalany <elias.bachaalany@gmail.com>
 */
-
+#pragma warning(push)
+#pragma warning(disable: 4267 4244)
 #include <loader.hpp>
 #include <idp.hpp>
 #include <expr.hpp>
 #include <kernwin.hpp>
 #include <diskio.hpp>
 #include <registry.hpp>
-
+#pragma warning(pop)
 #include "utils_impl.cpp"
 
 //-------------------------------------------------------------------------
@@ -151,7 +152,8 @@ protected:
     }
 
     // Add a new script file and properly populate its script info object
-    script_info_t *add_script(
+    // and returns a borrowed reference
+    const script_info_t *add_script(
         const char *script_file,
         bool silent = false,
         bool unique = true)
@@ -215,7 +217,7 @@ protected:
             if (find_script != nullptr && streq(script_file.c_str(), find_script))
                 find_idx = idx;
 
-            add_script(script_file.c_str());
+            add_script(script_file.c_str(), true);
             ++idx;
         }
         return find_idx;

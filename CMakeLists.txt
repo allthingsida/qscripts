@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
 
+project(qscripts)
+
 # Included file
 list(APPEND DISABLED_SOURCES utils_impl.cpp)
 
