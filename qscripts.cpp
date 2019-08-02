@@ -62,6 +62,9 @@ protected:
 
     static constexpr int widths_[2] = { 10, 70 };
     static constexpr char *const header_[2] = { "Language", "Script" };
+    static constexpr char *QSCRIPTS_TITLE = "QScripts";
+    static constexpr char ACTION_DEACTIVATE_SCRIPT_ID[] = "qscript:deactivatescript";
+    static action_desc_t deactivate_script_action;
 
     extlangs_t m_langs;
     qstring m_browse_scripts_filter;
@@ -87,10 +90,34 @@ protected:
         return nullptr;
     }
 
-    int normalize_filemon_interval(int change_interval)
+    inline int normalize_filemon_interval(const int change_interval) const
     {
         return qmax(300, change_interval);
     }
+
+    struct deactivate_script_ah_t: public action_handler_t
+    {
+        scripts_chooser_t *ch;
+
+        virtual int idaapi activate(action_activation_ctx_t *ctx)
+        {
+            ch->m_nactive = -1;
+            refresh_chooser(QSCRIPTS_TITLE);
+            return 1;
+        }
+
+        virtual action_state_t idaapi update(action_update_ctx_t *ctx)
+        {
+            return ch->m_nactive != -1 ? AST_ENABLE : AST_DISABLE;
+        }
+
+        void set_chooser(scripts_chooser_t *ch)
+        {
+            this->ch = ch;
+        }
+    };
+    friend struct deactivate_script_ah_t;
+    deactivate_script_ah_t deactivate_script_ah;
 
     // Executes a script file and remembers its modified time stamp
     bool execute_active_script()
@@ -198,6 +225,7 @@ protected:
         if (has_active_script)
             active_script = m_scripts[m_nactive].script_file;
 
+        // Deactivate current script in the hope of finding it again in the list
         m_nactive = -1;
 
         // Read all scripts
@@ -392,6 +420,7 @@ protected:
             unregister_timer(m_filemon_timer);
             m_filemon_timer = nullptr;
         }
+        unregister_action(ACTION_DEACTIVATE_SCRIPT_ID);
     }
 
     // Initializes the chooser and populates the script files from the last run
@@ -431,10 +460,14 @@ protected:
             s_filemon_timer_cb,
             this);
 
+        deactivate_script_ah.set_chooser(this);
+        deactivate_script_action.handler = &deactivate_script_ah;
+
+        register_action(deactivate_script_action);
         return true;
     }
 
-    scripts_chooser_t(const char *title_ = "QScripts")
+    scripts_chooser_t(const char *title_ = QSCRIPTS_TITLE)
         : chooser_t(flags_, qnumber(widths_), widths_, header_, title_)
     {
         popup_names[POPUP_EDIT] = "~O~ptions";
@@ -444,9 +477,25 @@ public:
     static void show()
     {
         static scripts_chooser_t singleton;
-        singleton.choose();
+        auto r = singleton.choose();
+        TWidget *widget;
+        if (r == 0 && (widget = find_widget(QSCRIPTS_TITLE)) != nullptr)
+        {
+            attach_action_to_popup(
+                widget,
+                nullptr,
+                ACTION_DEACTIVATE_SCRIPT_ID);
+        }
     }
 };
+
+action_desc_t scripts_chooser_t::deactivate_script_action = ACTION_DESC_LITERAL(
+    ACTION_DEACTIVATE_SCRIPT_ID, 
+    "Deactivate script",
+    nullptr,
+    nullptr,
+    nullptr,
+    51);
 
 //-------------------------------------------------------------------------
 int idaapi init(void)
