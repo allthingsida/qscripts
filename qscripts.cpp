@@ -108,7 +108,10 @@ protected:
 
         virtual action_state_t idaapi update(action_update_ctx_t *ctx)
         {
-            return ch->m_nactive != -1 ? AST_ENABLE : AST_DISABLE;
+            if (ctx->widget_title != ch->title)
+                return AST_DISABLE_FOR_WIDGET;
+            else
+                return ch->m_nactive != -1 ? AST_ENABLE : AST_DISABLE;
         }
 
         void set_chooser(scripts_chooser_t *ch)
@@ -116,6 +119,7 @@ protected:
             this->ch = ch;
         }
     };
+
     friend struct deactivate_script_ah_t;
     deactivate_script_ah_t deactivate_script_ah;
 
@@ -493,7 +497,7 @@ action_desc_t scripts_chooser_t::deactivate_script_action = ACTION_DESC_LITERAL(
     ACTION_DEACTIVATE_SCRIPT_ID, 
     "Deactivate script",
     nullptr,
-    nullptr,
+    "Ctrl+D",
     nullptr,
     51);
 
