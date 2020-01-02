@@ -20,6 +20,14 @@ There are few options that can be configured in QScripts. Just press Ctrl+E or r
 * Show file name when execution: display the name of the file that is automatically executed
 * Execute the unload script function: A special function, if defined, called `__quick_unload_script` will be invoked before reloading the script. This gives your script a chance to do some cleanup (for example to unregister some hotkeys)
 
+## Usage from scripts
+It is possible to invoke QScripts from a script. For instance, in IDAPython, you can execute the last active script with:
+
+```python
+load_and_run_plugin("qscripts", 1);
+```
+
+(note the run argument `1`)
 
 # Installation
 
