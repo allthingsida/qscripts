@@ -50,6 +50,7 @@ struct script_exec_options_t
     int clear_log        = 0;
     int show_filename    = 0;
     int exec_unload_func = 0;
+    qstring active_script_name;
 };
 
 //-------------------------------------------------------------------------
@@ -136,6 +137,9 @@ protected:
             auto &si = m_scripts[m_nactive];
             auto script_file = si.script_file.c_str();
 
+            // Remember the executed script
+            m_options.active_script_name = si.script_file;
+
             // First things first: always take the file's modification timestamp first so not to visit it again in the file monitor timer
             if (!get_file_modification_time(script_file, si.modified_time))
             {
@@ -156,12 +160,12 @@ protected:
             }
 
             if (m_options.show_filename)
-                msg("Executing %s\n", script_file);
+                msg("QScripts executing %s...\n", script_file);
 
             bool ok = si.lang->compile_file(script_file, &errbuf);
             if (!ok)
             {
-                msg("Failed to compile script file: '%s':\n%s", script_file, errbuf.c_str());
+                msg("QScrits failed to compile script file: '%s':\n%s", script_file, errbuf.c_str());
                 break;
             }
 
@@ -172,7 +176,7 @@ protected:
                 ok = si.lang->call_func(&result, "main", &result, 0, &errbuf);
                 if (!ok)
                 {
-                    msg("Failed to run IDC main function '%s':\n%s", script_file, errbuf.c_str());
+                    msg("QScripts failed to run the IDC main() of file '%s':\n%s", script_file, errbuf.c_str());
                     break;
                 }
             }
@@ -220,63 +224,45 @@ protected:
         return &si;
     }
 
-    // Rebuilds the scripts list while maintaining the active script when possible
-    ssize_t build_scripts_list(const char *find_script = nullptr)
-    {
-        // Remember active script and invalidate its index
-        qstring active_script;
-        bool has_active_script = m_nactive >= 0 && size_t(m_nactive) < m_scripts.size();
-        if (has_active_script)
-            active_script = m_scripts[m_nactive].script_file;
-
-        // Deactivate current script in the hope of finding it again in the list
-        m_nactive = -1;
-
-        // Read all scripts
-        qstrvec_t scripts_list;
-        reg_read_strlist(&scripts_list, IDAREG_RECENT_SCRIPTS);
-
-        // Rebuild the list
-        ssize_t idx = 0, find_idx = -1;
-        m_scripts.qclear();
-        for (auto &script_file: scripts_list)
-        {
-            // Restore active script
-            if (has_active_script && active_script == script_file)
-                m_nactive = idx;
-
-            // Optionally, find the index of a script by name
-            if (find_script != nullptr && streq(script_file.c_str(), find_script))
-                find_idx = idx;
-
-            add_script(script_file.c_str(), true);
-            ++idx;
-        }
-        return find_idx;
-    }
-
     // Save or load the options
     void saveload_options(bool bsave)
     {
-        struct int_options_t
+        struct options_t
         {
             const char *name;
-            int *pval;
+            int vtype;
+            void *pval;
         } int_options [] =
         {
-            {"QScripts_interval",         &m_options.change_interval},
-            {"QScripts_clearlog",         &m_options.clear_log},
-            {"QScripts_showscriptname",   &m_options.show_filename},
-            {"QScripts_exec_unload_func", &m_options.exec_unload_func},
+            {"QScripts_interval",           VT_LONG, &m_options.change_interval},
+            {"QScripts_clearlog",           VT_LONG, &m_options.clear_log},
+            {"QScripts_showscriptname",     VT_LONG, &m_options.show_filename},
+            {"QScripts_exec_unload_func",   VT_LONG, &m_options.exec_unload_func},
+            {"QScripts_active_script_name", VT_STR,  &m_options.active_script_name}
         };
 
-        for (auto &iopt: int_options)
+        for (auto &opt: int_options)
         {
-            if (bsave)
-                reg_write_int(iopt.name, *iopt.pval);
-            else
-                *iopt.pval = reg_read_int(iopt.name, *iopt.pval);
+            if (opt.vtype == VT_LONG)
+            {
+                if (bsave)
+                    reg_write_int(opt.name, *(int *)opt.pval);
+                else
+                    *(int *)opt.pval = reg_read_int(opt.name, *(int *)opt.pval);
+            }
+            else if (opt.vtype == VT_STR)
+            {
+                if (bsave)
+                {
+                    reg_write_string(opt.name, ((qstring *)opt.pval)->c_str());
+                }
+                else
+                { 
+                    reg_read_string(((qstring *)opt.pval), opt.name);
+                }
+            }
         }
+
         if (!bsave)
             m_options.change_interval = normalize_filemon_interval(m_options.change_interval);
     }
@@ -407,6 +393,11 @@ protected:
         qstring script_file = m_scripts[n].script_file;
         reg_update_strlist(IDAREG_RECENT_SCRIPTS, nullptr, IDA_MAX_RECENT_SCRIPTS, script_file.c_str());
         build_scripts_list();
+
+        // Active script removed?
+        if (m_nactive == -1)
+            m_options.active_script_name.qclear();
+
         return adjust_last_item(n);
     }
 
@@ -425,13 +416,18 @@ protected:
             m_filemon_timer = nullptr;
         }
         unregister_action(ACTION_DEACTIVATE_SCRIPT_ID);
+
+        // Always re-save the options on close
+        saveload_options(true);
     }
 
     // Initializes the chooser and populates the script files from the last run
     bool init() override
     {
-        // Collect all installed external languages
-        collect_extlangs(&m_langs, false);
+        data_init();
+
+        // Load scripts
+        m_nactive = build_scripts_list(m_options.active_script_name.c_str());
 
         //
         // Build the filter
@@ -452,12 +448,7 @@ protected:
         m_browse_scripts_filter.remove_last();
         m_browse_scripts_filter.append("\nSelect script file to load");
 
-        //
-        // Load scripts and register the monitor
-        //
-        saveload_options(false);
-        build_scripts_list();
-
+        // Register the monitor
         m_b_filemon_timer_paused = false;
         m_filemon_timer = register_timer(
             m_options.change_interval,
@@ -471,6 +462,17 @@ protected:
         return true;
     }
 
+    ssize_t data_init()
+    {
+        // Collect all installed external languages
+        collect_extlangs(&m_langs, false);
+
+        // Load options
+        saveload_options(false);
+
+        return 0;
+    }
+
     scripts_chooser_t(const char *title_ = QSCRIPTS_TITLE)
         : chooser_t(flags_, qnumber(widths_), widths_, header_, title_)
     {
@@ -478,9 +480,63 @@ protected:
     }
 
 public:
+    scripts_chooser_t(bool) 
+    { 
+        data_init();
+    }
+
+    // Rebuilds the scripts list while maintaining the active script when possible
+    ssize_t build_scripts_list(const char *find_script = nullptr)
+    {
+        // Remember active script and invalidate its index
+        qstring active_script;
+        bool has_active_script = m_nactive >= 0 && size_t(m_nactive) < m_scripts.size();
+        if (has_active_script)
+            active_script = m_scripts[m_nactive].script_file;
+
+        // Deactivate current script in the hope of finding it again in the list
+        m_nactive = -1;
+
+        // Read all scripts
+        qstrvec_t scripts_list;
+        reg_read_strlist(&scripts_list, IDAREG_RECENT_SCRIPTS);
+
+        // Rebuild the list
+        ssize_t idx = 0, find_idx = -1;
+        m_scripts.qclear();
+        for (auto &script_file: scripts_list)
+        {
+            // Restore active script
+            if (has_active_script && active_script == script_file)
+                m_nactive = idx;
+
+            // Optionally, find the index of a script by name
+            if (find_script != nullptr && streq(script_file.c_str(), find_script))
+                find_idx = idx;
+
+            add_script(script_file.c_str(), true);
+            ++idx;
+        }
+        return find_idx;
+    }
+
+    void execute_last_active_script()
+    {
+        if (m_options.active_script_name.empty())
+            return;
+
+        auto n = build_scripts_list(m_options.active_script_name.c_str());
+        if (n != -1)
+        {
+            m_nactive = n;
+            execute_active_script();
+        }
+    }
+
     static void show()
     {
         static scripts_chooser_t singleton;
+        // TODO: select the active script by default
         auto r = singleton.choose();
         TWidget *widget;
         if (r == 0 && (widget = find_widget(QSCRIPTS_TITLE)) != nullptr)
@@ -515,7 +571,23 @@ void idaapi term(void)
 //--------------------------------------------------------------------------
 bool idaapi run(size_t arg)
 {
-    scripts_chooser_t::show();
+    switch (arg)
+    {
+        // Full UI run
+        case 0:
+        {
+            scripts_chooser_t::show();
+            break;
+        }
+        // Headless last script invocation
+        case 1:
+        {
+            scripts_chooser_t headless(true);
+            headless.execute_last_active_script();
+            break;
+        }
+    }
+
     return true;
 }
 
