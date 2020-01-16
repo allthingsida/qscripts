@@ -17,6 +17,15 @@ scripts in your favorite editor and execute them directly in IDA.
 #pragma warning(pop)
 #include "utils_impl.cpp"
 
+namespace IDAICONS { enum
+{
+    FLASH         = 171,          // Flash icon
+    FLASH_EDIT    = 173,          // A flash icon with the pencil on it
+    BPT_DISABLED  = 62,           // A gray filled circle crossed (disabled breakpoint)
+    RED_DOT       = 59,           // Filled red circle (used to designate an active breakpoint)
+    GRAY_X_CIRCLE = 175,          // A filled gray circle with an X in it
+}; }
+
 //-------------------------------------------------------------------------
 // Some constants
 static constexpr int  IDA_MAX_RECENT_SCRIPTS    = 512;
@@ -46,8 +55,8 @@ using scripts_info_t = qvector<script_info_t>;
 struct qscripts_chooser_t: public chooser_t
 {
 private:
-	bool m_b_filemon_timer_active;
-	qtimer_t m_filemon_timer = nullptr;
+    bool m_b_filemon_timer_active;
+    qtimer_t m_filemon_timer = nullptr;
 
     int opt_change_interval  = 500;
     int opt_clear_log        = 0;
@@ -66,7 +75,7 @@ private:
         return selected_script.script_file.c_str();
     }
 
-	bool is_monitor_active() const { return m_b_filemon_timer_active; }
+    bool is_monitor_active() const { return m_b_filemon_timer_active; }
 
     void clear_selected_script()
     {
@@ -84,21 +93,17 @@ private:
     // Executes a script file and makes it the active script
     bool execute_script(script_info_t *script_info)
     {
-        // Assume failure
-        bool ok = false;
+        bool remove_script = true;
+        bool exec_ok = false;
 
         // Pause the file monitor timer while executing a script
-		bool old_state = activate_monitor(false);
+        bool old_state = activate_monitor(false);
         do
         {
-            // Remember the executed script
-            if (script_info != nullptr)
-                selected_script = *script_info;
-
-            auto script_file = selected_script.script_file.c_str();
+            auto script_file = script_info->script_file.c_str();
 
             // First things first: always take the file's modification timestamp first so not to visit it again in the file monitor timer
-            if (!get_file_modification_time(script_file, selected_script.modified_time))
+            if (!get_file_modification_time(script_file, script_info->modified_time))
             {
                 msg("Script file '%s' not found!\n", script_file);
                 break;
@@ -111,6 +116,8 @@ private:
                 msg("Unknown script language detected for '%s'!\n", script_file);
                 break;
             }
+
+            remove_script = false;
 
             if (opt_clear_log)
                 msg_clear();
@@ -126,8 +133,8 @@ private:
             if (opt_show_filename)
                 msg("QScripts executing %s...\n", script_file);
 
-            ok = elang->compile_file(script_file, &errbuf);
-            if (!ok)
+            exec_ok = elang->compile_file(script_file, &errbuf);
+            if (!exec_ok)
             {
                 msg("QScrits failed to compile script file: '%s':\n%s", script_file, errbuf.c_str());
                 break;
@@ -137,21 +144,20 @@ private:
             if (elang->is_idc())
             {
                 idc_value_t result;
-                ok = elang->call_func(&result, "main", &result, 0, &errbuf);
-                if (!ok)
+                exec_ok = elang->call_func(&result, "main", &result, 0, &errbuf);
+                if (!exec_ok)
                 {
                     msg("QScripts failed to run the IDC main() of file '%s':\n%s", script_file, errbuf.c_str());
                     break;
                 }
             }
-            ok = true;
         } while (false);
         activate_monitor(old_state);
 
-        if (!ok)
+        if (remove_script)
             clear_selected_script();
 
-        return ok;
+        return !remove_script && exec_ok;
     }
 
     // Save or load the options
@@ -223,7 +229,7 @@ private:
 
             // Script is up to date, no need to execute it again
             if (cur_mtime != selected_script.modified_time)
-                execute_script(nullptr);
+                execute_script(&selected_script);
         } while (false);
 
         return opt_change_interval;
@@ -236,41 +242,71 @@ protected:
 
     static int widths_[1];
     static char *const header_[1];
-    static char ACTION_DEACTIVATE_SCRIPT_ID[];
-    static action_desc_t deactivate_script_action;
+    static char ACTION_DEACTIVATE_MONITOR_ID[];
+    static char ACTION_EXECUTE_SELECTED_SCRIPT_ID[];
+    static action_desc_t deactivate_monitor_action;
+    static action_desc_t execute_selected_script_action;
 
     scripts_info_t m_scripts;
     ssize_t m_nselected = NO_SELECTION;
 
-    struct deactivate_script_ah_t: public action_handler_t
+    struct qscript_action_handler_t: action_handler_t
     {
-    private:
+    protected:
         qscripts_chooser_t *ch;
 
-        virtual int idaapi activate(action_activation_ctx_t *ctx)
+        
+        bool is_correct_widget(action_update_ctx_t *ctx)
+        {
+            return ctx->widget_title == ch->title;
+        }
+    public:
+        void setup(qscripts_chooser_t *ch, action_desc_t &ah)
+        {
+            this->ch = ch;
+            ah.handler = this;
+            register_action(ah);
+        }
+    };
+
+    struct deactivate_script_ah_t: qscript_action_handler_t
+    {
+        virtual action_state_t idaapi update(action_update_ctx_t *ctx) override
+        {
+            if (!is_correct_widget(ctx))
+                return AST_DISABLE_FOR_WIDGET;
+            else
+                return ch->is_monitor_active() ? AST_ENABLE : AST_DISABLE;
+        }
+
+        virtual int idaapi activate(action_activation_ctx_t *ctx) override
         {
             ch->activate_monitor(false);
             refresh_chooser(QSCRIPTS_TITLE);
             return 1;
         }
+    };
 
-        virtual action_state_t idaapi update(action_update_ctx_t *ctx)
+    struct exec_selected_script_ah_t: qscript_action_handler_t
+    {
+        virtual action_state_t idaapi update(action_update_ctx_t *ctx) override
         {
-            if (ctx->widget_title != ch->title)
+            if (!is_correct_widget(ctx))
                 return AST_DISABLE_FOR_WIDGET;
             else
-                return ch->m_nselected != NO_SELECTION ? AST_ENABLE_FOR_WIDGET : AST_DISABLE_FOR_WIDGET;
+                return ctx->chooser_selection.empty() ? AST_DISABLE : AST_ENABLE;
         }
 
-    public:
-        void set_chooser(qscripts_chooser_t *ch)
+        virtual int idaapi activate(action_activation_ctx_t *ctx) override
         {
-            this->ch = ch;
+            if (!ctx->chooser_selection.empty())
+                ch->execute_script_at(ctx->chooser_selection.at(0));
+            return 1;
         }
     };
 
-    friend struct deactivate_script_ah_t;
-    deactivate_script_ah_t deactivate_script_ah;
+    deactivate_script_ah_t    deactivate_monitor_ah;
+    exec_selected_script_ah_t execute_selected_script_ah;
 
     // Add a new script file and properly populate its script info object
     // and returns a borrowed reference
@@ -325,7 +361,7 @@ protected:
         } chk_opts;
         // Load previous options first (account for multiple instances of IDA)
         saveload_options(false);
-		
+        
         chk_opts.n = 0;
         chk_opts.b_clear_log        = opt_clear_log;
         chk_opts.b_show_filename    = opt_show_filename;
@@ -368,7 +404,22 @@ protected:
         auto si = &m_scripts[n];
         cols->at(0) = si->script_file;
         if (n == m_nselected)
-            attrs->flags = is_monitor_active() ? CHITEM_BOLD : CHITEM_ITALIC;
+        {
+            if (is_monitor_active())
+            {
+                attrs->flags = CHITEM_BOLD;
+                *icon = IDAICONS::FLASH_EDIT;
+            }
+            else
+            {
+                attrs->flags = CHITEM_ITALIC;
+                *icon = IDAICONS::RED_DOT;
+            }
+        }
+        else
+        {
+            *icon = IDAICONS::GRAY_X_CIRCLE;
+        }
     }
 
     // Activate a script and execute it
@@ -376,9 +427,11 @@ protected:
     {
         m_nselected = n;
 
-        // Activate the monitor after executing the script successfully
-        if (execute_script(&m_scripts[n]))
-            activate_monitor();
+        // Set as the selected script and execute it
+        selected_script = m_scripts[n];
+        execute_script(&selected_script);
+        // ...and activate the monitor even if the script fails
+        activate_monitor();
 
         return cbret_t(n, chooser_base_t::ALL_CHANGED);
     }
@@ -420,7 +473,8 @@ protected:
 
     void idaapi closed() override
     {
-        unregister_action(ACTION_DEACTIVATE_SCRIPT_ID);
+        unregister_action(ACTION_DEACTIVATE_MONITOR_ID);
+        unregister_action(ACTION_EXECUTE_SELECTED_SCRIPT_ID);
         saveload_options(true);
     }
 
@@ -450,10 +504,8 @@ protected:
     // Initializes the chooser and populates the script files from the last run
     bool init() override
     {
-        deactivate_script_ah.set_chooser(this);
-        deactivate_script_action.handler = &deactivate_script_ah;
-
-        register_action(deactivate_script_action);
+        deactivate_monitor_ah.setup(this, deactivate_monitor_action);
+        execute_selected_script_ah.setup(this, execute_selected_script_action);
         return true;
     }
 
@@ -512,7 +564,13 @@ public:
     void execute_last_selected_script()
     {
         if (has_selected_script())
-            execute_script(nullptr);
+            execute_script(&selected_script);
+    }
+
+    void execute_script_at(ssize_t n)
+    {
+        if (n >=0 && n < ssize_t(m_scripts.size()))
+            execute_script(&m_scripts[n]);
     }
 
     void show()
@@ -527,7 +585,11 @@ public:
             attach_action_to_popup(
                 widget,
                 nullptr,
-                ACTION_DEACTIVATE_SCRIPT_ID);
+                ACTION_DEACTIVATE_MONITOR_ID);
+            attach_action_to_popup(
+                widget,
+                nullptr,
+                ACTION_EXECUTE_SELECTED_SCRIPT_ID);
         }
     }
 
@@ -561,18 +623,27 @@ public:
     }
 };
 
-int qscripts_chooser_t::widths_[1]                     = { 70 };
-char *const qscripts_chooser_t::header_[1]             = { "Script" };
-char *qscripts_chooser_t::QSCRIPTS_TITLE               = "QScripts";
-char qscripts_chooser_t::ACTION_DEACTIVATE_SCRIPT_ID[] = "qscript:deactivatescript";
+int qscripts_chooser_t::widths_[1]                           = { 70 };
+char *const qscripts_chooser_t::header_[1]                   = { "Script" };
+char *qscripts_chooser_t::QSCRIPTS_TITLE                     = "QScripts";
+char qscripts_chooser_t::ACTION_DEACTIVATE_MONITOR_ID[]      = "qscript:deactivatemonitor";
+char qscripts_chooser_t::ACTION_EXECUTE_SELECTED_SCRIPT_ID[] = "qscript:execselscript";
 
-action_desc_t qscripts_chooser_t::deactivate_script_action = ACTION_DESC_LITERAL(
-    ACTION_DEACTIVATE_SCRIPT_ID, 
-    "Deactivate script",
+action_desc_t qscripts_chooser_t::deactivate_monitor_action = ACTION_DESC_LITERAL(
+    ACTION_DEACTIVATE_MONITOR_ID, 
+    "Deactivate script monitor",
     nullptr,
     "Ctrl+D",
     nullptr,
-    51);
+    IDAICONS::BPT_DISABLED);
+
+action_desc_t qscripts_chooser_t::execute_selected_script_action = ACTION_DESC_LITERAL(
+    ACTION_EXECUTE_SELECTED_SCRIPT_ID,
+    "Execute selected script",
+    nullptr,
+    "Shift+Enter",
+    nullptr,
+    IDAICONS::FLASH);
 
 qscripts_chooser_t *g_qscripts_ui;
 
@@ -584,7 +655,7 @@ int idaapi init(void)
     {
         msg("QScripts: Failed to install monitor!\n");
         delete g_qscripts_ui;
-		g_qscripts_ui = nullptr;
+        g_qscripts_ui = nullptr;
 
         return PLUGIN_SKIP;
     }
@@ -611,13 +682,15 @@ bool idaapi run(size_t arg)
         // Activate the scripts monitor
         case 2:
         {
-            g_qscripts_ui->activate_monitor();
+            g_qscripts_ui->activate_monitor(true);
+            refresh_chooser(g_qscripts_ui->QSCRIPTS_TITLE);
             break;
         }
         // Deactivate the scripts monitor
         case 3:
         {
             g_qscripts_ui->activate_monitor(false);
+            refresh_chooser(g_qscripts_ui->QSCRIPTS_TITLE);
             break;
         }
     }
