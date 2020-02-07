@@ -6,11 +6,14 @@ scripts in your favorite editor and execute them directly in IDA.
 
 (c) Elias Bachaalany <elias.bachaalany@gmail.com>
 */
+#include <unordered_map>
+#include <string>
 #pragma warning(push)
 #pragma warning(disable: 4267 4244)
 #include <loader.hpp>
 #include <idp.hpp>
 #include <expr.hpp>
+#include <prodir.h>
 #include <kernwin.hpp>
 #include <diskio.hpp>
 #include <registry.hpp>
@@ -19,11 +22,13 @@ scripts in your favorite editor and execute them directly in IDA.
 
 namespace IDAICONS { enum
 {
-    FLASH         = 171,          // Flash icon
-    FLASH_EDIT    = 173,          // A flash icon with the pencil on it
-    BPT_DISABLED  = 62,           // A gray filled circle crossed (disabled breakpoint)
-    RED_DOT       = 59,           // Filled red circle (used to designate an active breakpoint)
-    GRAY_X_CIRCLE = 175,          // A filled gray circle with an X in it
+    FLASH                           = 171,          // Flash icon
+    FLASH_EDIT                      = 173,          // A flash icon with the pencil on it
+    BPT_DISABLED                    = 62,           // A gray filled circle crossed (disabled breakpoint)
+    EYE_GLASSES_EDIT                = 43,           // Eye glasses with a small pencil overlay
+    RED_DOT                         = 59,           // Filled red circle (used to designate an active breakpoint)
+    GRAPH_WITH_FUNC                 = 78,           // Nodes in a graph icon with a smaller function icon overlapped on top of the graph
+    GRAY_X_CIRCLE                   = 175,          // A filled gray circle with an X in it
 }; }
 
 //-------------------------------------------------------------------------
@@ -33,22 +38,117 @@ static constexpr char IDAREG_RECENT_SCRIPTS[]   = "RecentScripts";
 static constexpr char UNLOAD_SCRIPT_FUNC_NAME[] = "__quick_unload_script";
 
 //-------------------------------------------------------------------------
-struct script_info_t
+// Structure to describe a file and its metadata
+struct fileinfo_t
 {
-    qstring script_file;
+    std::string file_path;
     qtime64_t modified_time;
-    bool operator==(const script_info_t &rhs) const
+    bool operator==(const fileinfo_t &rhs) const
     {
-        return script_file == rhs.script_file;
+        return file_path == rhs.file_path;
     }
 
-    script_info_t(const char *script_file = nullptr)
+    fileinfo_t(const char *script_file = nullptr)
     {
         if (script_file != nullptr)
-            this->script_file = script_file;
+            this->file_path = script_file;
+    }
+
+    virtual void clear()
+    {
+        file_path.clear();
+        modified_time = 0;
+    }
+
+    // Checks if the current script has been modified
+    // Optionally updates the time stamp to the latest one if modified
+    // Returns:
+    // -1: file no longer exists
+    //  0: no modification
+    //  1: modified
+    int is_modified(bool update_mtime=true)
+    {
+        qtime64_t cur_mtime;
+        const char *script_file = this->file_path.c_str();
+        if (!get_file_modification_time(script_file, cur_mtime))
+            return -1;
+
+        // Script is up to date, no need to execute it again
+        if (cur_mtime == modified_time)
+            return 0;
+
+        if (update_mtime)
+            modified_time = cur_mtime;
+        return 1;
     }
 };
+
+// Script file
+using script_info_t = fileinfo_t;
+// Script files
 using scripts_info_t = qvector<script_info_t>;
+
+// Active script information along with its dependencies
+struct active_script_info_t: script_info_t
+{
+    // The dependency index file
+    fileinfo_t dep_index;
+    // The list of dependencies
+    std::unordered_map<std::string, script_info_t> dep_scripts;
+    qstring reload_cmd;
+
+    const bool has_dep(const std::string &dep_file) const
+    {
+        return dep_scripts.find(dep_file) != dep_scripts.end();
+    }
+
+    const bool has_reload_directive() const
+    {
+        return !reload_cmd.empty();
+    }
+
+    int is_dep_index_modified(bool update_mtime=true)
+    {
+        return dep_index.is_modified(update_mtime);
+    }
+
+    bool set_dep_index(const char *dep_file)
+    {
+        if (!get_file_modification_time(dep_file, dep_index.modified_time))
+            return false;
+
+        dep_index.file_path = dep_file;
+        return true;
+    }
+
+    active_script_info_t &operator=(const script_info_t &rhs)
+    {
+        if (this != &rhs)
+        {
+            file_path = rhs.file_path;
+            modified_time = rhs.modified_time;
+            dep_scripts.clear();
+            dep_index.clear();
+        }
+        return *this;
+    }
+
+    void clear() override
+    {
+        script_info_t::clear();
+        dep_index.clear();
+        dep_scripts.clear();
+        reload_cmd.clear();
+    }
+
+    void invalidate_all_scripts()
+    {
+        modified_time = 0;
+        // Invalidate all but the index file itself
+        for (auto &kv: dep_scripts)
+            kv.second.modified_time = 0;
+    }
+};
 
 //-------------------------------------------------------------------------
 // Non-modal scripts chooser
@@ -63,7 +163,7 @@ private:
     int opt_show_filename    = 0;
     int opt_exec_unload_func = 0;
 
-    script_info_t selected_script;
+    active_script_info_t selected_script;
 
     int normalize_filemon_interval(const int change_interval) const
     {
@@ -72,35 +172,112 @@ private:
 
     const char *get_selected_script_file()
     {
-        return selected_script.script_file.c_str();
+        return selected_script.file_path.c_str();
     }
 
-    bool is_monitor_active() const { return m_b_filemon_timer_active; }
+
+    void set_selected_script(script_info_t &script)
+    {
+        // Activate script
+        selected_script = script;
+
+        // Parse the dependency index file
+        qstring dep_file;
+        dep_file.sprnt("%s.dep.qscripts", script.file_path.c_str());
+        FILE *fp = qfopen(dep_file.c_str(), "r");
+        if (fp == nullptr)
+            return;
+
+        selected_script.set_dep_index(dep_file.c_str());
+
+        for (qstring line = dep_file; qgetline(&line, fp) != -1;)
+        {
+            line.trim2();
+
+            // Skip comment lines
+            if (strncmp(line.c_str(), "//", 2) == 0)
+                continue;
+
+            // Parse special directives
+            if (strncmp(line.c_str(), "/reload ", 8) == 0)
+            {
+                selected_script.reload_cmd = line.c_str() + 8;
+                continue;
+            }
+
+            // Skip dependencies that no longer exist
+            qtime64_t mtime;
+            if (!get_file_modification_time(line.c_str(), mtime))
+                continue;
+
+            script_info_t si;
+            si.file_path = line.c_str();
+            si.modified_time = mtime;
+            selected_script.dep_scripts[line.c_str()] = std::move(si);
+        }
+        qfclose(fp);
+    }
 
     void clear_selected_script()
     {
-        selected_script.script_file.qclear();
-        selected_script.modified_time = 0;
+        selected_script.clear();
         // ...and deactivate the monitor
         activate_monitor(false);
     }
 
     const bool has_selected_script()
     {
-        return !selected_script.script_file.empty();
+        return !selected_script.file_path.empty();
     }
 
-    // Executes a script file and makes it the active script
+    bool is_monitor_active() const { return m_b_filemon_timer_active; }
+
+    bool execute_reload_directive(const char *script_file)
+    {
+        qstring err;
+
+        do
+        {
+            qstring base_name = script_file;
+            char *basename, *ext;
+            qsplitfile(&base_name[0], &basename, &ext);
+            basename = qstrrchr(base_name.begin(), DIRCHAR);
+            if (basename++ == nullptr || ext == nullptr)
+            {
+                err = "could not split file!";
+                break;
+            }
+
+            extlang_object_t elang(find_extlang_by_ext(ext));
+            if (elang == nullptr)
+            {
+                err.sprnt("unknown script language detected for '%s'!\n", script_file);
+                break;
+            }
+
+            qstring reload_cmd = selected_script.reload_cmd;
+            reload_cmd.replace("$basename$", basename);
+
+            if (!elang->eval_snippet(reload_cmd.c_str(), &err))
+                break;
+            return true;
+        } while (false);
+
+        msg("QScripts failed to reload script file: '%s':\n%s", script_file, err.c_str());
+
+        return false;
+    }
+
+    // Executes a script file
     bool execute_script(script_info_t *script_info)
     {
-        bool remove_script = true;
         bool exec_ok = false;
 
         // Pause the file monitor timer while executing a script
         bool old_state = activate_monitor(false);
         do
         {
-            auto script_file = script_info->script_file.c_str();
+            auto script_file = script_info->file_path.c_str();
 
             // First things first: always take the file's modification timestamp first so not to visit it again in the file monitor timer
             if (!get_file_modification_time(script_file, script_info->modified_time))
@@ -109,15 +286,13 @@ private:
                 break;
             }
 
-            const char *script_ext = get_file_extension(script_file);
+            const char *script_ext = get_file_ext(script_file);
             extlang_object_t elang(nullptr);
             if (script_ext == nullptr || (elang = find_extlang_by_ext(script_ext)) == nullptr)
             {
                 msg("Unknown script language detected for '%s'!\n", script_file);
                 break;
             }
-
-            remove_script = false;
 
             if (opt_clear_log)
                 msg_clear();
@@ -136,7 +311,7 @@ private:
             exec_ok = elang->compile_file(script_file, &errbuf);
             if (!exec_ok)
             {
-                msg("QScrits failed to compile script file: '%s':\n%s", script_file, errbuf.c_str());
+                msg("QScripts failed to compile script file: '%s':\n%s", script_file, errbuf.c_str());
                 break;
             }
 
@@ -154,15 +329,13 @@ private:
         } while (false);
         activate_monitor(old_state);
 
-        if (remove_script)
-            clear_selected_script();
-
-        return !remove_script && exec_ok;
+        return exec_ok;
     }
 
     // Save or load the options
     void saveload_options(bool bsave)
     {
+        enum {STD_STR = 1000 };
         struct options_t
         {
             const char *name;
@@ -174,7 +347,7 @@ private:
             {"QScripts_clearlog",             VT_LONG, &opt_clear_log},
             {"QScripts_showscriptname",       VT_LONG, &opt_show_filename},
             {"QScripts_exec_unload_func",     VT_LONG, &opt_exec_unload_func},
-            {"QScripts_selected_script_name", VT_STR,  &selected_script.script_file}
+            {"QScripts_selected_script_name", STD_STR,  &selected_script.file_path}
         };
 
         for (auto &opt: int_options)
@@ -189,12 +362,19 @@ private:
             else if (opt.vtype == VT_STR)
             {
                 if (bsave)
-                {
                     reg_write_string(opt.name, ((qstring *)opt.pval)->c_str());
-                }
                 else
-                { 
                     reg_read_string(((qstring *)opt.pval), opt.name);
+            }
+            else if (opt.vtype == STD_STR)
+            {
+                if (bsave)
+                    reg_write_string(opt.name, ((std::string *)opt.pval)->c_str());
+                else
+                {
+                    qstring tmp;
+                    reg_read_string(&tmp, opt.name);
+                    *((std::string *)opt.pval) = tmp.c_str();
                 }
             }
         }
@@ -216,22 +396,65 @@ private:
             if (!is_monitor_active() || !has_selected_script())
                 break;
 
-            // Check if file is modified and execute it
+            // Check if the active script or its dependencies are changed:
+            // 1. Dependency file --> repopulate it and execute active script
+            // 2. Any dependencies --> reload if needed and //
+            // 3. Active script --> execute it again
+            auto &dep_scripts = selected_script.dep_scripts;
+
+            // Let's check the dependency index file first
+            auto mod_stat = selected_script.is_dep_index_modified();
+            if (mod_stat == 1)
+            {
+                // Force re-parsing of the index file
+                dep_scripts.clear();
+                set_selected_script(selected_script);
+
+                // Let's invalidate all the scripts time stamps so we ensure they are re-interpreted again
+                selected_script.invalidate_all_scripts();
+
+                // Refresh the UI
+                refresh_chooser(QSCRIPTS_TITLE);
+
+                // Just leave and come back fast so we get a chance to re-evaluate everything
+                return 1; // (1 ms)
+            }
+            // Dependency index file is gone
+            else if (mod_stat == -1)
+            {
+                // Let's just check the active script
+                dep_scripts.clear();
+                break;
+            }
+
+            // Check the dependency scripts
+            bool dep_changed = false;
+            for (auto &kv: dep_scripts)
+            {
+                auto &deps = kv.second;
+                int mod_stat = deps.is_modified();
+                if (mod_stat == 1)
+                {
+                    dep_changed = true;
+                    if (selected_script.has_reload_directive())
+                        execute_reload_directive(deps.file_path.c_str());
+                }
+            }
+
             qtime64_t cur_mtime;
-            const char *script_file = selected_script.script_file.c_str();
+            const char *script_file = selected_script.file_path.c_str();
             if (!get_file_modification_time(script_file, cur_mtime))
             {
                 // Script no longer exists
                 clear_selected_script();
-                msg("Active script '%s' no longer exists!\n", script_file);
+                msg("QScripts detected that the active script '%s' no longer exists!\n", script_file);
                 break;
             }
 
-            // Script is up to date, no need to execute it again
-            if (cur_mtime != selected_script.modified_time)
+            // Script or its dependencies changed?
+            if (dep_changed || cur_mtime != selected_script.modified_time)
                 execute_script(&selected_script);
         } while (false);
-
         return opt_change_interval;
     }
 
@@ -331,7 +554,7 @@ protected:
         }
 
         auto &si         = m_scripts.push_back();
-        si.script_file   = script_file;
+        si.file_path     = script_file;
         si.modified_time = mtime;
         return &si;
     }
@@ -402,7 +625,7 @@ protected:
         size_t n) const override
     {
         auto si = &m_scripts[n];
-        cols->at(0) = si->script_file;
+        cols->at(0) = si->file_path.c_str();
         if (n == m_nselected)
         {
             if (is_monitor_active())
@@ -416,6 +639,10 @@ protected:
                 *icon = IDAICONS::RED_DOT;
             }
         }
+        else if (is_monitor_active() && selected_script.has_dep(si->file_path))
+        {
+            *icon = IDAICONS::EYE_GLASSES_EDIT;
+        }
         else
         {
             *icon = IDAICONS::GRAY_X_CIRCLE;
@@ -428,7 +655,7 @@ protected:
         m_nselected = n;
 
         // Set as the selected script and execute it
-        selected_script = m_scripts[n];
+        set_selected_script(m_scripts[n]);
         execute_script(&selected_script);
         // ...and activate the monitor even if the script fails
         activate_monitor();
@@ -453,7 +680,7 @@ protected:
     // Remove a script from the list
     cbret_t idaapi del(size_t n) override
     {
-        qstring script_file = m_scripts[n].script_file;
+        auto &script_file = m_scripts[n].file_path;
         reg_update_strlist(IDAREG_RECENT_SCRIPTS, nullptr, IDA_MAX_RECENT_SCRIPTS, script_file.c_str());
         build_scripts_list();
 

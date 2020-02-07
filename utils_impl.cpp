@@ -1,14 +1,4 @@
 //-------------------------------------------------------------------------
-const char *get_file_extension(const char *script_file)
-{
-    auto pext = strrchr(script_file, '.');
-    if (pext == nullptr)
-        return nullptr;
-
-    return ++pext;
-}
-
-//-------------------------------------------------------------------------
 struct collect_extlangs: extlang_visitor_t
 {
 	extlangs_t *langs;
