@@ -29,3 +29,13 @@ bool get_file_modification_time(
 	else
 		return mtime = stat_buf.qst_mtime, true;
 }
+
+//-------------------------------------------------------------------------
+void normalize_path_sep(qstring &path)
+{
+#ifdef __FAT__
+    path.replace("/", SDIRCHAR);
+#else
+    path.replace("\\", SDIRCHAR);
+#endif
+}
