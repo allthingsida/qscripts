@@ -489,16 +489,23 @@ private:
 
             // Check the dependency scripts
             bool dep_script_changed = false;
+            bool brk = false;
             for (auto &kv: dep_scripts)
             {
                 auto &dep_script = kv.second;
                 if (dep_script.get_modification_status() == 1)
                 {
                     dep_script_changed = true;
-                    if (selected_script.has_reload_directive())
-                        execute_reload_directive(dep_script.file_path.c_str());
+                    if (     selected_script.has_reload_directive()
+                         && !execute_reload_directive(dep_script.file_path.c_str()))
+                    {
+                        brk = true;
+                        break;
+                    }
                 }
             }
+            if (brk)
+                break;
 
             // Check the main script
             if ((mod_stat = selected_script.get_modification_status()) == -1)
