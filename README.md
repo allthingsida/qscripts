@@ -32,20 +32,27 @@ It is possible to execute a script from `QScripts` without having to activate it
 It is possible to instruct `QScripts` to re-execute the active script if any of its dependent scripts are also modified. To use the automatic dependency system, please create a file named exactly like your active script but with the additional `.deps.qscripts` extension. In that file you put your dependent scripts full path.
 
 When using Python, it would be helpful if we can also `reload` the changed dependent script from the active script automatically. To do that, simply add the directive line `/reload` along with the desired reload syntax. For example, here's a complete `.deps.qscripts` file with a `reload` directive:
+
 ```
 /reload reload($basename$)
-C:\Temp\t2.py
+t2.py
 //This is a comment
-C:\Temp\t3.py
+t3.py
 ```
 
-There's only one special variable for now and this is `$basename$`. This will be replaced with the file's base name.
-
-So what happens now if we have an active file in `C:\Temp\t1.py` with the dependency file above?
+So what happens now if we have an active file `t1.py` with the dependency file above?
 
 1. Any time `t1.py` changes, it will be automatically re-executed in IDA. That's the default behavior of `QScripts` <= 1.0.5.
-2. If the dependency index file `C:\Temp\t1.py.deps.qscripts` is changed, then your new dependencies will be reloaded and the active script will be executed again.
-3. If any dependency file has changed, then the active script will re-execute. If you had a `reload` directive set up, then the modified dependency files will also be reloaded.
+2. If the dependency index file `t1.py.deps.qscripts` is changed, then your new dependencies will be reloaded and the active script will be executed again.
+3. If any dependency script file has changed, then the active script will re-execute. If you had a `reload` directive set up, then the modified dependency files will also be reloaded.
+
+Please note that if each dependent script file has its own dependency index file, then QScripts will recursively make all the linked dependencies as part of the active script dependencies.
+
+### Special variables in the dependency index file
+
+* `$basename$`: This variable is expanded to the base name of the current dependency line
+* `$env:EnvVariableName$`: `EnvVariableName` is expanded to its environment variable value if it exists or left unexpanded otherwise
+
 
 ## Using QScripts programmatically
 It is possible to invoke `QScripts` from a script. For instance, in IDAPython, you can execute the last selected script with:

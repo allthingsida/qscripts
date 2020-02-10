@@ -8,6 +8,7 @@ scripts in your favorite editor and execute them directly in IDA.
 */
 #include <unordered_map>
 #include <string>
+#include <regex>
 #pragma warning(push)
 #pragma warning(disable: 4267 4244)
 #include <loader.hpp>
@@ -171,6 +172,7 @@ struct qscripts_chooser_t: public chooser_t
 private:
     bool m_b_filemon_timer_active;
     qtimer_t m_filemon_timer = nullptr;
+    static std::regex RE_EXPANDER;
 
     int opt_change_interval  = 500;
     int opt_clear_log        = 0;
@@ -219,6 +221,9 @@ private:
                 }
             }
 
+            // From here on, any other line is an expandable string leading to a script file
+            expand_string(line, line, script_file);
+
             if (!qisabspath(line.c_str()))
             {
                 qstring dir_name = script_file;
@@ -226,14 +231,17 @@ private:
 
                 qstring full_path;
                 full_path.sprnt("%s" SDIRCHAR "%s", dir_name.c_str(), line.c_str());
-                normalize_path_sep(full_path);
                 line = full_path;
             }
 
-            // Skip dependency scripts that no longer exist
+            // Always normalize the final script path
+            normalize_path_sep(line);
+
+            // Skip dependency scripts that (do not|no longer) exist
             script_info_t si;
             if (!get_file_modification_time(line.c_str(), si.modified_time))
                 continue;
+
             // Add script
             si.file_path = line.c_str();
             selected_script.dep_scripts[line.c_str()] = std::move(si);
@@ -268,31 +276,48 @@ private:
 
     bool is_monitor_active() const { return m_b_filemon_timer_active; }
 
+    void expand_string(qstring &input, qstring &output, const char *script_file)
+    {
+        output = std::regex_replace(
+            input.c_str(), 
+            RE_EXPANDER, 
+            [this, script_file](auto &m) -> std::string
+            { 
+                qstring match1 = m.str(1).c_str();
+                if (strncmp(match1.c_str(), "basename", 8) == 0)
+                {
+                    char *basename, *ext;
+                    qstring wrk_str;
+                    get_basename_and_ext(script_file, &basename, &ext, wrk_str);
+                    return basename;
+                }
+                else if (strncmp(match1.c_str(), "env:", 4) == 0)
+                {
+                    qstring env;
+                    if (qgetenv(match1.begin() + 4, &env))
+                        return env.c_str();
+                }
+                return m.str(1);
+            }
+        ).c_str();
+    }
+
     bool execute_reload_directive(const char *script_file)
     {
         qstring err;
 
         do
         {
-            qstring base_name = script_file;
-            char *basename, *ext;
-            qsplitfile(&base_name[0], &basename, &ext);
-            basename = qstrrchr(base_name.begin(), DIRCHAR);
-            if (basename++ == nullptr || ext == nullptr)
-            {
-                err = "could not split file!";
-                break;
-            }
-
-            extlang_object_t elang(find_extlang_by_ext(ext));
+            auto ext = get_file_ext(script_file);
+            extlang_object_t elang(find_extlang_by_ext(ext == nullptr ? "" : ext));
             if (elang == nullptr)
             {
                 err.sprnt("unknown script language detected for '%s'!\n", script_file);
                 break;
             }
 
-            qstring reload_cmd = selected_script.reload_cmd;
-            reload_cmd.replace("$basename$", basename);
+            qstring reload_cmd;
+            expand_string(selected_script.reload_cmd, reload_cmd, script_file);
 
             if (!elang->eval_snippet(reload_cmd.c_str(), &err))
                 break;
@@ -463,15 +488,15 @@ private:
             }
 
             // Check the dependency scripts
-            bool dep_changed = false;
+            bool dep_script_changed = false;
             for (auto &kv: dep_scripts)
             {
-                auto &deps = kv.second;
-                if (deps.get_modification_status() == 1)
+                auto &dep_script = kv.second;
+                if (dep_script.get_modification_status() == 1)
                 {
-                    dep_changed = true;
+                    dep_script_changed = true;
                     if (selected_script.has_reload_directive())
-                        execute_reload_directive(deps.file_path.c_str());
+                        execute_reload_directive(dep_script.file_path.c_str());
                 }
             }
 
@@ -485,7 +510,7 @@ private:
             }
 
             // Script or its dependencies changed?
-            if (dep_changed || mod_stat == 1)
+            if (dep_script_changed || mod_stat == 1)
                 execute_script(&selected_script);
         } while (false);
         return opt_change_interval;
@@ -883,6 +908,7 @@ public:
     }
 };
 
+std::regex qscripts_chooser_t::RE_EXPANDER                   = std::regex(R"(\$(.+?)\$)");
 int qscripts_chooser_t::widths_[1]                           = { 70 };
 char *const qscripts_chooser_t::header_[1]                   = { "Script" };
 char *qscripts_chooser_t::QSCRIPTS_TITLE                     = "QScripts";
