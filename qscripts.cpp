@@ -393,26 +393,42 @@ private:
         return exec_ok;
     }
 
+    enum {
+        OPTID_INTERVAL      = 0x0001, 
+        OPTID_CLEARLOG      = 0x0002,
+        OPTID_SHOWNAME      = 0x0004,
+        OPTID_UNLOADEXEC    = 0x0008,
+        OPTID_SELSCRIPT     = 0x0010,
+
+        OPTID_ONLY_SCRIPT    = OPTID_SELSCRIPT,
+        OPTID_ALL_BUT_SCRIPT = 0xffff & ~OPTID_ONLY_SCRIPT,
+        OPTID_ALL           = 0xffff,
+    };
+
     // Save or load the options
-    void saveload_options(bool bsave)
+    void saveload_options(bool bsave, int what_ids = OPTID_ALL)
     {
         enum { STD_STR = 1000 };
         struct options_t
         {
+            int id;
             const char *name;
             int vtype;
             void *pval;
         } int_options [] =
         {
-            {"QScripts_interval",             VT_LONG, &opt_change_interval},
-            {"QScripts_clearlog",             VT_LONG, &opt_clear_log},
-            {"QScripts_showscriptname",       VT_LONG, &opt_show_filename},
-            {"QScripts_exec_unload_func",     VT_LONG, &opt_exec_unload_func},
-            {"QScripts_selected_script_name", STD_STR,  &selected_script.file_path}
+            {OPTID_INTERVAL,   "QScripts_interval",             VT_LONG, &opt_change_interval},
+            {OPTID_CLEARLOG,   "QScripts_clearlog",             VT_LONG, &opt_clear_log},
+            {OPTID_SHOWNAME,   "QScripts_showscriptname",       VT_LONG, &opt_show_filename},
+            {OPTID_UNLOADEXEC, "QScripts_exec_unload_func",     VT_LONG, &opt_exec_unload_func},
+            {OPTID_SELSCRIPT,  "QScripts_selected_script_name", STD_STR, &selected_script.file_path}
         };
 
         for (auto &opt: int_options)
         {
+            if ((what_ids & opt.id) == 0)
+                continue;
+
             if (opt.vtype == VT_LONG)
             {
                 if (bsave)
@@ -430,7 +446,9 @@ private:
             else if (opt.vtype == STD_STR)
             {
                 if (bsave)
+                {
                     reg_write_string(opt.name, ((std::string *)opt.pval)->c_str());
+                }
                 else
                 {
                     qstring tmp;
@@ -721,7 +739,9 @@ protected:
 
         // Set as the selected script and execute it
         set_selected_script(m_scripts[n]);
-        execute_script(&selected_script);
+        if (execute_script(&selected_script))
+            saveload_options(true, OPTID_ONLY_SCRIPT);
+
         // ...and activate the monitor even if the script fails
         activate_monitor();
 
