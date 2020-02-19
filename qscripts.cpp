@@ -89,6 +89,15 @@ using script_info_t = fileinfo_t;
 // Script files
 using scripts_info_t = qvector<script_info_t>;
 
+// Dependency script info
+struct dep_script_info_t: fileinfo_t
+{
+    // Each dependency script can have its own reload command
+    qstring reload_cmd;
+
+    const bool has_reload_directive() const { return !reload_cmd.empty(); }
+};
+
 // Active script information along with its dependencies
 struct active_script_info_t: script_info_t
 {
@@ -96,18 +105,12 @@ struct active_script_info_t: script_info_t
     qvector<fileinfo_t> dep_indices;
 
     // The list of dependency scripts
-    std::unordered_map<std::string, script_info_t> dep_scripts;
-    qstring reload_cmd;
+    std::unordered_map<std::string, dep_script_info_t> dep_scripts;
 
     // Checks to see if we have a dependency on a given file
     const bool has_dep(const std::string &dep_file) const
     {
         return dep_scripts.find(dep_file) != dep_scripts.end();
-    }
-
-    const bool has_reload_directive() const
-    {
-        return !reload_cmd.empty();
     }
 
     // If no dependency index files have been modified, we return 0
@@ -153,7 +156,6 @@ struct active_script_info_t: script_info_t
         script_info_t::clear();
         dep_indices.qclear();
         dep_scripts.clear();
-        reload_cmd.clear();
     }
 
     void invalidate_all_scripts()
@@ -202,6 +204,7 @@ private:
 
         selected_script.add_dep_index(dep_file.c_str());
 
+        qstring reload_cmd;
         // Parse each line
         for (qstring line = dep_file; qgetline(&line, fp) != -1;)
         {
@@ -216,7 +219,7 @@ private:
             {
                 if (strncmp(line.c_str(), "/reload ", 8) == 0)
                 {
-                    selected_script.reload_cmd = line.c_str() + 8;
+                    reload_cmd = line.c_str() + 8;
                     continue;
                 }
             }
@@ -238,13 +241,14 @@ private:
             normalize_path_sep(line);
 
             // Skip dependency scripts that (do not|no longer) exist
-            script_info_t si;
-            if (!get_file_modification_time(line.c_str(), si.modified_time))
+            dep_script_info_t dep_script;
+            if (!get_file_modification_time(line.c_str(), dep_script.modified_time))
                 continue;
 
             // Add script
-            si.file_path = line.c_str();
-            selected_script.dep_scripts[line.c_str()] = std::move(si);
+            dep_script.file_path = line.c_str();
+            dep_script.reload_cmd = reload_cmd;
+            selected_script.dep_scripts[line.c_str()] = std::move(dep_script);
 
             parse_deps_for_script(line.c_str(), false);
         }
@@ -302,9 +306,10 @@ private:
         ).c_str();
     }
 
-    bool execute_reload_directive(const char *script_file)
+    bool execute_reload_directive(dep_script_info_t &dep_script_file)
     {
         qstring err;
+        const char *script_file = dep_script_file.file_path.c_str();
 
         do
         {
@@ -317,7 +322,7 @@ private:
             }
 
             qstring reload_cmd;
-            expand_string(selected_script.reload_cmd, reload_cmd, script_file);
+            expand_string(dep_script_file.reload_cmd, reload_cmd, script_file);
 
             if (!elang->eval_snippet(reload_cmd.c_str(), &err))
                 break;
@@ -394,15 +399,15 @@ private:
     }
 
     enum {
-        OPTID_INTERVAL      = 0x0001, 
-        OPTID_CLEARLOG      = 0x0002,
-        OPTID_SHOWNAME      = 0x0004,
-        OPTID_UNLOADEXEC    = 0x0008,
-        OPTID_SELSCRIPT     = 0x0010,
+        OPTID_INTERVAL       = 0x0001, 
+        OPTID_CLEARLOG       = 0x0002,
+        OPTID_SHOWNAME       = 0x0004,
+        OPTID_UNLOADEXEC     = 0x0008,
+        OPTID_SELSCRIPT      = 0x0010,
 
         OPTID_ONLY_SCRIPT    = OPTID_SELSCRIPT,
         OPTID_ALL_BUT_SCRIPT = 0xffff & ~OPTID_ONLY_SCRIPT,
-        OPTID_ALL           = 0xffff,
+        OPTID_ALL            = 0xffff,
     };
 
     // Save or load the options
@@ -514,8 +519,8 @@ private:
                 if (dep_script.get_modification_status() == 1)
                 {
                     dep_script_changed = true;
-                    if (     selected_script.has_reload_directive()
-                         && !execute_reload_directive(dep_script.file_path.c_str()))
+                    if (     dep_script.has_reload_directive()
+                         && !execute_reload_directive(dep_script))
                     {
                         brk = true;
                         break;
