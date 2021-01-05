@@ -283,10 +283,10 @@ private:
     void expand_string(qstring &input, qstring &output, const char *script_file)
     {
         output = std::regex_replace(
-            input.c_str(), 
-            RE_EXPANDER, 
+            input.c_str(),
+            RE_EXPANDER,
             [this, script_file](auto &m) -> std::string
-            { 
+            {
                 qstring match1 = m.str(1).c_str();
                 if (strncmp(match1.c_str(), "basename", 8) == 0)
                 {
@@ -399,7 +399,7 @@ private:
     }
 
     enum {
-        OPTID_INTERVAL       = 0x0001, 
+        OPTID_INTERVAL       = 0x0001,
         OPTID_CLEARLOG       = 0x0002,
         OPTID_SHOWNAME       = 0x0004,
         OPTID_UNLOADEXEC     = 0x0008,
@@ -474,7 +474,7 @@ private:
 
     int filemon_timer_cb()
     {
-        do 
+        do
         {
             // No active script, do nothing
             if (!is_monitor_active() || !has_selected_script())
@@ -547,12 +547,12 @@ private:
     }
 
 protected:
-    static constexpr uint32 flags_ = 
+    static constexpr uint32 flags_ =
         CH_KEEP    | CH_RESTORE  | CH_ATTRS   |
         CH_CAN_DEL | CH_CAN_EDIT | CH_CAN_INS | CH_CAN_REFRESH;
 
     static int widths_[1];
-    static char *const header_[1];
+    static const char *const header_[1];
     static char ACTION_DEACTIVATE_MONITOR_ID[];
     static char ACTION_EXECUTE_SELECTED_SCRIPT_ID[];
     static action_desc_t deactivate_monitor_action;
@@ -566,7 +566,7 @@ protected:
     protected:
         qscripts_chooser_t *ch;
 
-        
+
         bool is_correct_widget(action_update_ctx_t *ctx)
         {
             return ctx->widget_title == ch->title;
@@ -672,7 +672,7 @@ protected:
         } chk_opts;
         // Load previous options first (account for multiple instances of IDA)
         saveload_options(false);
-        
+
         chk_opts.n = 0;
         chk_opts.b_clear_log        = opt_clear_log;
         chk_opts.b_show_filename    = opt_show_filename;
@@ -758,7 +758,7 @@ protected:
     {
         qstring filter;
         get_browse_scripts_filter(filter);
-        const char *script_file = ask_file(false, "", filter.c_str());
+        const char *script_file = ask_file(false, "", "%s", filter.c_str());
         if (script_file == nullptr)
             return {};
 
@@ -827,7 +827,7 @@ protected:
     }
 
 public:
-    static char *QSCRIPTS_TITLE;
+    static const char *QSCRIPTS_TITLE;
 
     qscripts_chooser_t(const char *title_ = QSCRIPTS_TITLE)
         : chooser_t(flags_, qnumber(widths_), widths_, header_, title_)
@@ -942,13 +942,13 @@ public:
 
 std::regex qscripts_chooser_t::RE_EXPANDER                   = std::regex(R"(\$(.+?)\$)");
 int qscripts_chooser_t::widths_[1]                           = { 70 };
-char *const qscripts_chooser_t::header_[1]                   = { "Script" };
-char *qscripts_chooser_t::QSCRIPTS_TITLE                     = "QScripts";
+const char *const qscripts_chooser_t::header_[1]             = { "Script" };
+const char *qscripts_chooser_t::QSCRIPTS_TITLE               = "QScripts";
 char qscripts_chooser_t::ACTION_DEACTIVATE_MONITOR_ID[]      = "qscript:deactivatemonitor";
 char qscripts_chooser_t::ACTION_EXECUTE_SELECTED_SCRIPT_ID[] = "qscript:execselscript";
 
 action_desc_t qscripts_chooser_t::deactivate_monitor_action = ACTION_DESC_LITERAL(
-    ACTION_DEACTIVATE_MONITOR_ID, 
+    ACTION_DEACTIVATE_MONITOR_ID,
     "Deactivate script monitor",
     nullptr,
     "Ctrl+D",
@@ -966,7 +966,7 @@ action_desc_t qscripts_chooser_t::execute_selected_script_action = ACTION_DESC_L
 qscripts_chooser_t *g_qscripts_ui;
 
 //-------------------------------------------------------------------------
-int idaapi init(void)
+plugmod_t *idaapi init(void)
 {
     g_qscripts_ui = new qscripts_chooser_t();
     if (!g_qscripts_ui->start_monitor())
