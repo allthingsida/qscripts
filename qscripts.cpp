@@ -180,6 +180,7 @@ private:
     int opt_clear_log        = 0;
     int opt_show_filename    = 0;
     int opt_exec_unload_func = 0;
+    int opt_with_undo        = 0;
 
     active_script_info_t selected_script;
 
@@ -306,9 +307,8 @@ private:
         ).c_str();
     }
 
-    bool execute_reload_directive(dep_script_info_t &dep_script_file)
+    bool execute_reload_directive(dep_script_info_t &dep_script_file, qstring &err)
     {
-        qstring err;
         const char *script_file = dep_script_file.file_path.c_str();
 
         do
@@ -334,8 +334,16 @@ private:
         return false;
     }
 
+    bool execute_script(script_info_t *script_info, bool with_undo)
+    {
+        if (with_undo)
+            return process_ui_action(ACTION_EXECUTE_SCRIPT_WITH_UNDO_ID);
+        else
+            return execute_script_sync(script_info);
+    }
+
     // Executes a script file
-    bool execute_script(script_info_t *script_info)
+    bool execute_script_sync(script_info_t *script_info)
     {
         bool exec_ok = false;
 
@@ -404,6 +412,7 @@ private:
         OPTID_SHOWNAME       = 0x0004,
         OPTID_UNLOADEXEC     = 0x0008,
         OPTID_SELSCRIPT      = 0x0010,
+        OPTID_WITHUNDO       = 0x0020,
 
         OPTID_ONLY_SCRIPT    = OPTID_SELSCRIPT,
         OPTID_ALL_BUT_SCRIPT = 0xffff & ~OPTID_ONLY_SCRIPT,
@@ -426,7 +435,8 @@ private:
             {OPTID_CLEARLOG,   "QScripts_clearlog",             VT_LONG, &opt_clear_log},
             {OPTID_SHOWNAME,   "QScripts_showscriptname",       VT_LONG, &opt_show_filename},
             {OPTID_UNLOADEXEC, "QScripts_exec_unload_func",     VT_LONG, &opt_exec_unload_func},
-            {OPTID_SELSCRIPT,  "QScripts_selected_script_name", STD_STR, &selected_script.file_path}
+            {OPTID_SELSCRIPT,  "QScripts_selected_script_name", STD_STR, &selected_script.file_path},
+            {OPTID_WITHUNDO,   "QScripts_with_undo",            VT_LONG, &opt_with_undo}
         };
 
         for (auto &opt: int_options)
@@ -518,10 +528,12 @@ private:
                 auto &dep_script = kv.second;
                 if (dep_script.get_modification_status() == 1)
                 {
+                    qstring err;
                     dep_script_changed = true;
                     if (     dep_script.has_reload_directive()
-                         && !execute_reload_directive(dep_script))
+                         && !execute_reload_directive(dep_script, err))
                     {
+                        msg("QScripts: warning: failed to execute reload directive: %s\n", err.c_str());
                         brk = true;
                         break;
                     }
@@ -541,7 +553,7 @@ private:
 
             // Script or its dependencies changed?
             if (dep_script_changed || mod_stat == 1)
-                execute_script(&selected_script);
+                execute_script(&selected_script, opt_with_undo);
         } while (false);
         return opt_change_interval;
     }
@@ -553,11 +565,11 @@ protected:
 
     static int widths_[1];
     static const char *const header_[1];
+	
     static char ACTION_DEACTIVATE_MONITOR_ID[];
     static char ACTION_EXECUTE_SELECTED_SCRIPT_ID[];
-    static action_desc_t deactivate_monitor_action;
-    static action_desc_t execute_selected_script_action;
-
+    static char ACTION_EXECUTE_SCRIPT_WITH_UNDO_ID[];
+	
     scripts_info_t m_scripts;
     ssize_t m_nselected = NO_SELECTION;
 
@@ -566,17 +578,16 @@ protected:
     protected:
         qscripts_chooser_t *ch;
 
-
         bool is_correct_widget(action_update_ctx_t *ctx)
         {
             return ctx->widget_title == ch->title;
         }
     public:
-        void setup(qscripts_chooser_t *ch, action_desc_t &ah)
+        void setup(qscripts_chooser_t *ch, action_desc_t &action_desc)
         {
             this->ch = ch;
-            ah.handler = this;
-            register_action(ah);
+            action_desc.handler = this;
+            register_action(action_desc);
         }
     };
 
@@ -616,8 +627,49 @@ protected:
         }
     };
 
+    struct execute_script_ah_t: qscript_action_handler_t
+    {
+        virtual action_state_t idaapi update(action_update_ctx_t *ctx) override
+        {
+            return AST_ENABLE;
+        }
+
+        virtual int idaapi activate(action_activation_ctx_t *ctx) override
+        {
+            ch->execute_last_selected_script(false);
+            return 1;
+        }
+    };
+
     deactivate_script_ah_t    deactivate_monitor_ah;
     exec_selected_script_ah_t execute_selected_script_ah;
+    execute_script_ah_t       execute_script_with_undo_ah;
+
+    action_desc_t deactivate_monitor_actdesc = ACTION_DESC_LITERAL(
+        ACTION_DEACTIVATE_MONITOR_ID,
+        "Deactivate script monitor",
+        nullptr,
+        "Ctrl+D",
+        nullptr,
+        IDAICONS::BPT_DISABLED);
+
+    action_desc_t execute_selected_script_actdesc = ACTION_DESC_LITERAL(
+        ACTION_EXECUTE_SELECTED_SCRIPT_ID,
+        "Execute selected script",
+        nullptr,
+        "Shift+Enter",
+        nullptr,
+        IDAICONS::FLASH);
+
+    action_desc_t execute_script_with_undo_actdesc = ACTION_DESC_LITERAL_OWNER(
+        ACTION_EXECUTE_SCRIPT_WITH_UNDO_ID,
+        "QScript monitor: execute script",
+        nullptr,
+        &PLUGIN,
+        nullptr,
+        nullptr,
+        IDAICONS::FLASH,
+        ADF_OT_PLUGIN);
 
     // Add a new script file and properly populate its script info object
     // and returns a borrowed reference
@@ -655,7 +707,8 @@ protected:
             "<#Controls the refresh rate of the script change monitor#Script monitor ~i~nterval:D:100:10::>\n"
             "<#Clear the output window before re-running the script#C~l~ear the output window:C>\n"
             "<#Display the name of the file that is automatically executed#Show ~f~ile name when execution:C>\n"
-            "<#Execute a function called '__quick_unload_script' before reloading the script#Execute the ~u~nload script function:C>>\n"
+            "<#Execute a function called '__quick_unload_script' before reloading the script#Execute the u~n~load script function:C>\n"
+            "<#The executed scripts' side effects can be reverted with IDA's Undo#Enable ~u~ndo QScript execute script support:C>>\n"
             "\n"
             "\n";
 
@@ -668,6 +721,7 @@ protected:
                 ushort b_clear_log        : 1;
                 ushort b_show_filename    : 1;
                 ushort b_exec_unload_func : 1;
+                ushort b_with_undo        : 1;
             };
         } chk_opts;
         // Load previous options first (account for multiple instances of IDA)
@@ -677,6 +731,7 @@ protected:
         chk_opts.b_clear_log        = opt_clear_log;
         chk_opts.b_show_filename    = opt_show_filename;
         chk_opts.b_exec_unload_func = opt_exec_unload_func;
+        chk_opts.b_with_undo        = opt_with_undo;
         sval_t interval             = opt_change_interval;
 
         if (ask_form(form, &interval, &chk_opts.n) > 0)
@@ -686,6 +741,7 @@ protected:
             opt_clear_log        = chk_opts.b_clear_log;
             opt_show_filename    = chk_opts.b_show_filename;
             opt_exec_unload_func = chk_opts.b_exec_unload_func;
+            opt_with_undo        = chk_opts.b_with_undo;
 
             // Save the options directly
             saveload_options(true);
@@ -744,7 +800,7 @@ protected:
 
         // Set as the selected script and execute it
         set_selected_script(m_scripts[n]);
-        if (execute_script(&selected_script))
+        if (execute_script(&selected_script, opt_with_undo))
             saveload_options(true, OPTID_ONLY_SCRIPT);
 
         // ...and activate the monitor even if the script fails
@@ -792,6 +848,8 @@ protected:
     {
         unregister_action(ACTION_DEACTIVATE_MONITOR_ID);
         unregister_action(ACTION_EXECUTE_SELECTED_SCRIPT_ID);
+        unregister_action(ACTION_EXECUTE_SCRIPT_WITH_UNDO_ID);
+
         saveload_options(true);
     }
 
@@ -821,8 +879,9 @@ protected:
     // Initializes the chooser and populates the script files from the last run
     bool init() override
     {
-        deactivate_monitor_ah.setup(this, deactivate_monitor_action);
-        execute_selected_script_ah.setup(this, execute_selected_script_action);
+        deactivate_monitor_ah.setup(this, deactivate_monitor_actdesc);
+        execute_selected_script_ah.setup(this, execute_selected_script_actdesc);
+        execute_script_with_undo_ah.setup(this, execute_script_with_undo_actdesc);
         return true;
     }
 
@@ -878,16 +937,16 @@ public:
         return find_idx;
     }
 
-    void execute_last_selected_script()
+    void execute_last_selected_script(bool with_undo=false)
     {
         if (has_selected_script())
-            execute_script(&selected_script);
+        	execute_script(&selected_script, with_undo);
     }
 
     void execute_script_at(ssize_t n)
     {
         if (n >=0 && n < ssize_t(m_scripts.size()))
-            execute_script(&m_scripts[n]);
+            execute_script(&m_scripts[n], opt_with_undo);
     }
 
     void show()
@@ -940,28 +999,13 @@ public:
     }
 };
 
-std::regex qscripts_chooser_t::RE_EXPANDER                   = std::regex(R"(\$(.+?)\$)");
-int qscripts_chooser_t::widths_[1]                           = { 70 };
-const char *const qscripts_chooser_t::header_[1]             = { "Script" };
-const char *qscripts_chooser_t::QSCRIPTS_TITLE               = "QScripts";
-char qscripts_chooser_t::ACTION_DEACTIVATE_MONITOR_ID[]      = "qscript:deactivatemonitor";
-char qscripts_chooser_t::ACTION_EXECUTE_SELECTED_SCRIPT_ID[] = "qscript:execselscript";
-
-action_desc_t qscripts_chooser_t::deactivate_monitor_action = ACTION_DESC_LITERAL(
-    ACTION_DEACTIVATE_MONITOR_ID,
-    "Deactivate script monitor",
-    nullptr,
-    "Ctrl+D",
-    nullptr,
-    IDAICONS::BPT_DISABLED);
-
-action_desc_t qscripts_chooser_t::execute_selected_script_action = ACTION_DESC_LITERAL(
-    ACTION_EXECUTE_SELECTED_SCRIPT_ID,
-    "Execute selected script",
-    nullptr,
-    "Shift+Enter",
-    nullptr,
-    IDAICONS::FLASH);
+std::regex qscripts_chooser_t::RE_EXPANDER                    = std::regex(R"(\$(.+?)\$)");
+int qscripts_chooser_t::widths_[1]                            = { 70 };
+const char *const qscripts_chooser_t::header_[1]              = { "Script" };
+const char *qscripts_chooser_t::QSCRIPTS_TITLE                = "QScripts";
+char qscripts_chooser_t::ACTION_DEACTIVATE_MONITOR_ID[]       = "qscripts:deactivatemonitor";
+char qscripts_chooser_t::ACTION_EXECUTE_SELECTED_SCRIPT_ID[]  = "qscripts:execselscript";
+char qscripts_chooser_t::ACTION_EXECUTE_SCRIPT_WITH_UNDO_ID[] = "qscripts:execscriptwithundo";
 
 qscripts_chooser_t *g_qscripts_ui;
 
