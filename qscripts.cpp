@@ -666,7 +666,7 @@ protected:
         "QScript monitor: execute script",
         nullptr,
         &PLUGIN,
-        nullptr,
+        "Alt-Shift-X",
         nullptr,
         IDAICONS::FLASH,
         ADF_OT_PLUGIN);
