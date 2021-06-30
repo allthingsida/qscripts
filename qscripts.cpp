@@ -563,8 +563,8 @@ protected:
         CH_KEEP    | CH_RESTORE  | CH_ATTRS   |
         CH_CAN_DEL | CH_CAN_EDIT | CH_CAN_INS | CH_CAN_REFRESH;
 
-    static int widths_[1];
-    static const char *const header_[1];
+    static int widths_[2];
+    static const char *const header_[2];
 	
     static char ACTION_DEACTIVATE_MONITOR_ID[];
     static char ACTION_EXECUTE_SELECTED_SCRIPT_ID[];
@@ -769,7 +769,10 @@ protected:
         size_t n) const override
     {
         auto si = &m_scripts[n];
-        cols->at(0) = si->file_path.c_str();
+        auto path = si->file_path.c_str();
+        auto name = strrchr(path, DIRCHAR);
+        cols->at(0) = name == nullptr ? path : name + 1;
+        cols->at(1) = path;
         if (n == m_nselected)
         {
             if (is_monitor_active())
@@ -1000,8 +1003,8 @@ public:
 };
 
 std::regex qscripts_chooser_t::RE_EXPANDER                    = std::regex(R"(\$(.+?)\$)");
-int qscripts_chooser_t::widths_[1]                            = { 70 };
-const char *const qscripts_chooser_t::header_[1]              = { "Script" };
+int qscripts_chooser_t::widths_[2]                            = { 20, 70 };
+const char *const qscripts_chooser_t::header_[2]              = { "Script", "Path"};
 const char *qscripts_chooser_t::QSCRIPTS_TITLE                = "QScripts";
 char qscripts_chooser_t::ACTION_DEACTIVATE_MONITOR_ID[]       = "qscripts:deactivatemonitor";
 char qscripts_chooser_t::ACTION_EXECUTE_SELECTED_SCRIPT_ID[]  = "qscripts:execselscript";
@@ -1098,7 +1101,7 @@ plugin_t PLUGIN =
     init,
     term,
     run,
-    "Develop IDA scripts faster in your favorite text editor",
+    "QScripts: Develop IDA scripts faster in your favorite text editor",
     help,
     qscripts_chooser_t::QSCRIPTS_TITLE,
     wanted_hotkey
