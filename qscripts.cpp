@@ -201,7 +201,12 @@ private:
         dep_file.sprnt("%s.deps.qscripts", script_file);
         FILE *fp = qfopen(dep_file.c_str(), "r");
         if (fp == nullptr)
-            return false;
+        {
+            dep_file.sprnt("%s.proj.qscripts", script_file);
+            FILE *fp = qfopen(dep_file.c_str(), "r");
+            if (fp == nullptr)
+                return false;
+        }
 
         selected_script.add_dep_index(dep_file.c_str());
 
@@ -546,8 +551,8 @@ private:
             if ((mod_stat = selected_script.get_modification_status()) == -1)
             {
                 // Script no longer exists
-                clear_selected_script();
                 msg("QScripts detected that the active script '%s' no longer exists!\n", get_selected_script_file());
+                clear_selected_script();
                 break;
             }
 
