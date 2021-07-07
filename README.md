@@ -31,18 +31,27 @@ It is possible to execute a script from `QScripts` without having to activate it
 
 It is possible to instruct `QScripts` to re-execute the active script if any of its dependent scripts are also modified. To use the automatic dependency system, please create a file named exactly like your active script but with the additional `.deps.qscripts` extension. In that file you put your dependent scripts full path.
 
-When using Python, it would be helpful if we can also `reload` the changed dependent script from the active script automatically. To do that, simply add the directive line `/reload` along with the desired reload syntax. For example, here's a complete `.deps.qscripts` file with a `reload` directive:
+When using Python, it would be helpful if we can also `reload` the changed dependent script from the active script automatically. To do that, simply add the directive line `/reload` along with the desired reload syntax. For example, here's a complete `.deps.qscripts` file with a `reload` directive (for Python 2.x):
 
 ```
 /reload reload($basename$)
 t2.py
-//This is a comment
+// This is a comment
+t3.py
+```
+
+And for Python 3.x:
+
+```
+/reload import imp;imp.reload($basename$);
+t2.py
+// This is a comment
 t3.py
 ```
 
 So what happens now if we have an active file `t1.py` with the dependency file above?
 
-1. Any time `t1.py` changes, it will be automatically re-executed in IDA. That's the default behavior of `QScripts` <= 1.0.5.
+1. Any time `t1.py` changes, it will be automatically re-executed in IDA.
 2. If the dependency index file `t1.py.deps.qscripts` is changed, then your new dependencies will be reloaded and the active script will be executed again.
 3. If any dependency script file has changed, then the active script will re-execute. If you had a `reload` directive set up, then the modified dependency files will also be reloaded.
 
@@ -53,6 +62,21 @@ Please note that if each dependent script file has its own dependency index file
 * `$basename$`: This variable is expanded to the base name of the current dependency line
 * `$env:EnvVariableName$`: `EnvVariableName` is expanded to its environment variable value if it exists or left unexpanded otherwise
 
+
+## Using QScripts with trigger files
+
+Sometimes you don't want to trigger QScripts when your working scripts are saved, instead you want your own trigger condition.
+One way to achieve a custom trigger is by using the `/triggerfile` directive:
+
+```
+/reload import imp;imp.reload($basename$);
+/triggerfile createme.tmp
+
+// Just some dependencies:
+dep.py
+```
+
+This tells QScripts to wait until the trigger file `createme.tmp` is created before executing your script. Now, any time you want to invoke QScripts, just create the trigger file. The moment QScripts finds the trigger file, it deletes it and then always executes your active script (and reloads dependencies when applicable).
 
 ## Using QScripts programmatically
 It is possible to invoke `QScripts` from a script. For instance, in IDAPython, you can execute the last selected script with:

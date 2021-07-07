@@ -21,13 +21,22 @@ struct collect_extlangs: extlang_visitor_t
 // Utility function to return a file's last modification timestamp
 bool get_file_modification_time(
     const char *filename,
-    qtime64_t &mtime)
+    qtime64_t *mtime = nullptr)
 {
     qstatbuf stat_buf;
     if (qstat(filename, &stat_buf) != 0)
         return false;
-    else
-        return mtime = stat_buf.qst_mtime, true;
+
+    if (mtime != nullptr)
+        *mtime = stat_buf.qst_mtime;
+    return true;
+}
+
+bool get_file_modification_time(
+    const qstring &filename,
+    qtime64_t *mtime = nullptr)
+{
+    return get_file_modification_time(filename.c_str(), mtime);
 }
 
 //-------------------------------------------------------------------------

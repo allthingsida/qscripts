@@ -1,0 +1,3 @@
+/reload import imp;imp.reload($basename$);
+/triggerfile createme.tmp
+dep.py

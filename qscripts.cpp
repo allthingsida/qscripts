@@ -44,15 +44,21 @@ struct fileinfo_t
 {
     std::string file_path;
     qtime64_t modified_time;
-    bool operator==(const fileinfo_t &rhs) const
-    {
-        return file_path == rhs.file_path;
-    }
 
-    fileinfo_t(const char *script_file = nullptr)
+    fileinfo_t(const char* script_file = nullptr)
     {
         if (script_file != nullptr)
             this->file_path = script_file;
+    }
+
+    const bool empty() const
+    {
+        return file_path.empty();
+    }
+
+    bool operator==(const fileinfo_t &rhs) const
+    {
+        return file_path == rhs.file_path;
     }
 
     virtual void clear()
@@ -71,7 +77,7 @@ struct fileinfo_t
     {
         qtime64_t cur_mtime;
         const char *script_file = this->file_path.c_str();
-        if (!get_file_modification_time(script_file, cur_mtime))
+        if (!get_file_modification_time(script_file, &cur_mtime))
             return -1;
 
         // Script is up to date, no need to execute it again
@@ -80,6 +86,7 @@ struct fileinfo_t
 
         if (update_mtime)
             modified_time = cur_mtime;
+
         return 1;
     }
 };
@@ -101,6 +108,9 @@ struct dep_script_info_t: fileinfo_t
 // Active script information along with its dependencies
 struct active_script_info_t: script_info_t
 {
+    // Trigger file name
+    qstring trigger_file;
+
     // The dependencies index files. First entry is for the main script's deps
     qvector<fileinfo_t> dep_indices;
 
@@ -113,7 +123,10 @@ struct active_script_info_t: script_info_t
         return dep_scripts.find(dep_file) != dep_scripts.end();
     }
 
-    // If no dependency index files have been modified, we return 0
+    // Is this trigger based or dependency based?
+    const bool trigger_based() { return !trigger_file.empty(); }
+
+    // If no dependency index files have been modified, return 0.
     // Return 1 if one of them has been modified or -1 if one of them has gone missing.
     // In both latter cases, we have to recompute our dependencies
     int is_any_dep_index_modified(bool update_mtime = true)
@@ -131,7 +144,7 @@ struct active_script_info_t: script_info_t
     bool add_dep_index(const char *dep_file)
     {
         fileinfo_t fi;
-        if (!get_file_modification_time(dep_file, fi.modified_time))
+        if (!get_file_modification_time(dep_file, &fi.modified_time))
             return false;
 
         fi.file_path = dep_file;
@@ -156,11 +169,18 @@ struct active_script_info_t: script_info_t
         script_info_t::clear();
         dep_indices.qclear();
         dep_scripts.clear();
+        trigger_file.clear();
+    }
+
+    void invalidate()
+    {
+        modified_time = 0;
     }
 
     void invalidate_all_scripts()
     {
-        modified_time = 0;
+        invalidate();
+
         // Invalidate all but the index file itself
         for (auto &kv: dep_scripts)
             kv.second.modified_time = 0;
@@ -208,6 +228,7 @@ private:
                 return false;
         }
 
+        // Add the dependency file to the active script
         selected_script.add_dep_index(dep_file.c_str());
 
         qstring reload_cmd;
@@ -228,31 +249,24 @@ private:
                     reload_cmd = line.c_str() + 8;
                     continue;
                 }
+                else if (strncmp(line.c_str(), "/triggerfile ", 13) == 0)
+                {
+                    selected_script.trigger_file = line.c_str() + 13;
+                    expand_file_name(selected_script.trigger_file, script_file);
+                    continue;
+                }
             }
 
             // From here on, any other line is an expandable string leading to a script file
-            expand_string(line, line, script_file);
-
-            if (!qisabspath(line.c_str()))
-            {
-                qstring dir_name = script_file;
-                qdirname(dir_name.begin(), dir_name.size(), script_file);
-
-                qstring full_path;
-                full_path.sprnt("%s" SDIRCHAR "%s", dir_name.c_str(), line.c_str());
-                line = full_path;
-            }
-
-            // Always normalize the final script path
-            normalize_path_sep(line);
+            expand_file_name(line, script_file);
 
             // Skip dependency scripts that (do not|no longer) exist
             dep_script_info_t dep_script;
-            if (!get_file_modification_time(line.c_str(), dep_script.modified_time))
+            if (!get_file_modification_time(line, &dep_script.modified_time))
                 continue;
 
             // Add script
-            dep_script.file_path = line.c_str();
+            dep_script.file_path  = line.c_str();
             dep_script.reload_cmd = reload_cmd;
             selected_script.dep_scripts[line.c_str()] = std::move(dep_script);
 
@@ -261,6 +275,24 @@ private:
         qfclose(fp);
 
         return true;
+    }
+
+    void expand_file_name(qstring &filename, const char *templ_file)
+    {
+        expand_string(filename, filename, templ_file);
+
+        if (!qisabspath(filename.c_str()))
+        {
+            qstring dir_name = templ_file;
+            qdirname(dir_name.begin(), dir_name.size(), templ_file);
+
+            qstring full_path;
+            full_path.sprnt("%s" SDIRCHAR "%s", dir_name.c_str(), filename.c_str());
+            filename = full_path;
+        }
+
+        // Always normalize the final script path
+        normalize_path_sep(filename);
     }
 
     void set_selected_script(script_info_t &script)
@@ -285,6 +317,11 @@ private:
     }
 
     bool is_monitor_active() const { return m_b_filemon_timer_active; }
+
+    bool is_using_trigger_file()
+    {
+        return has_selected_script() && !selected_script.trigger_file.empty();
+    }
 
     void expand_string(qstring &input, qstring &output, const char *script_file)
     {
@@ -359,7 +396,7 @@ private:
             auto script_file = script_info->file_path.c_str();
 
             // First things first: always take the file's modification timestamp first so not to visit it again in the file monitor timer
-            if (!get_file_modification_time(script_file, script_info->modified_time))
+            if (!get_file_modification_time(script_file, &script_info->modified_time))
             {
                 msg("Script file '%s' not found!\n", script_file);
                 break;
@@ -487,6 +524,7 @@ private:
         return ((qscripts_chooser_t *)ud)->filemon_timer_cb();
     }
 
+    // Monitor callback
     int filemon_timer_cb()
     {
         do
@@ -494,6 +532,21 @@ private:
             // No active script, do nothing
             if (!is_monitor_active() || !has_selected_script())
                 break;
+
+            // In trigger file mode, just wait for the trigger file to be created
+            if (selected_script.trigger_based())
+            {
+                // The monitor waits until the trigger file is created
+                auto trigger_file = selected_script.trigger_file.c_str();
+                if (!get_file_modification_time(trigger_file))
+                    break;
+
+                // Delete trigger file
+                qunlink(trigger_file);
+                // Always execute the main script even if it was not changed
+                selected_script.invalidate();
+                // ...and proceed with qscript logic
+            }
 
             // Check if the active script or its dependencies are changed:
             // 1. Dependency file --> repopulate it and execute active script
@@ -570,11 +623,11 @@ protected:
 
     static int widths_[2];
     static const char *const header_[2];
-	
+
     static char ACTION_DEACTIVATE_MONITOR_ID[];
     static char ACTION_EXECUTE_SELECTED_SCRIPT_ID[];
     static char ACTION_EXECUTE_SCRIPT_WITH_UNDO_ID[];
-	
+
     scripts_info_t m_scripts;
     ssize_t m_nselected = NO_SELECTION;
 
@@ -608,7 +661,7 @@ protected:
 
         virtual int idaapi activate(action_activation_ctx_t *ctx) override
         {
-            ch->activate_monitor(false);
+            ch->clear_selected_script();
             refresh_chooser(QSCRIPTS_TITLE);
             return 1;
         }
@@ -691,7 +744,7 @@ protected:
         }
 
         qtime64_t mtime;
-        if (!get_file_modification_time(script_file, mtime))
+        if (!get_file_modification_time(script_file, &mtime))
         {
             if (!silent)
                 msg("Script file not found: '%s'\n", script_file);
@@ -948,7 +1001,7 @@ public:
     void execute_last_selected_script(bool with_undo=false)
     {
         if (has_selected_script())
-        	execute_script(&selected_script, with_undo);
+            execute_script(&selected_script, with_undo);
     }
 
     void execute_script_at(ssize_t n)
