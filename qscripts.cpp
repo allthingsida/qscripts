@@ -223,7 +223,7 @@ private:
         if (fp == nullptr)
         {
             dep_file.sprnt("%s.proj.qscripts", script_file);
-            FILE *fp = qfopen(dep_file.c_str(), "r");
+            fp = qfopen(dep_file.c_str(), "r");
             if (fp == nullptr)
                 return false;
         }
