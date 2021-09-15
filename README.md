@@ -1,6 +1,6 @@
 # What is QScripts?
 
-`QScripts` is productivity tool and an alternative to IDA's "Recent scripts" (Alt-F9) and "Execute Scripts" (Shift-F2) facilities. `QScripts` allows you to develop and run any supporting scripting language from the comfort of your own favorite text editor.
+`QScripts` is productivity tool and an alternative to IDA's "Recent scripts" (Alt-F9) and "Execute Scripts" (Shift-F2) facilities. `QScripts` allows you to develop and run any supported scripting language (\*.py; \*.idc, etc.) from the comfort of your own favorite text editor as soon as you save the active script or any of its dependencies.
 
 ![Quick introduction](docs/_resources/qscripts-vid-1.gif)
 
@@ -16,12 +16,12 @@ An active script will then be monitored for changes. If you modify the script in
 
 To deactivate a script, just press `Ctrl-D` or right-click and choose `Deactivate script monitor` from the `QScripts` window. When an active script becomes inactive, it will be shown in *italics*.
 
-There are few options that can be configured in `QScripts`. Just press `Ctrl+E` or right-click and selection options:
+There are few options that can be configured in `QScripts`. Just press `Ctrl+E` or right-click and select `Options`:
 
-* Script monitor interval: controls the refresh rate of the script change monitor. Ideally 500ms is a good amount of time to pick up script changes.
 * Clear message window before execution: clear the message log before re-running the script. Very handy if you to have a fresh output log each time.
 * Show file name when execution: display the name of the file that is automatically executed
 * Execute the unload script function: A special function, if defined, called `__quick_unload_script` will be invoked before reloading the script. This gives your script a chance to do some cleanup (for example to unregister some hotkeys)
+* Script monitor interval: controls the refresh rate of the script change monitor. Ideally 500ms is a good amount of time to pick up script changes.
 
 ## Executing a script without activating it
 
