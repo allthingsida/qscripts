@@ -189,7 +189,7 @@ struct active_script_info_t: script_info_t
 
 //-------------------------------------------------------------------------
 // Non-modal scripts chooser
-struct qscripts_chooser_t: public chooser_t
+struct qscripts_chooser_t: public plugmod_t, public chooser_t
 {
 private:
     bool m_b_filemon_timer_active;
@@ -703,18 +703,20 @@ protected:
     exec_selected_script_ah_t execute_selected_script_ah;
     execute_script_ah_t       execute_script_with_undo_ah;
 
-    action_desc_t deactivate_monitor_actdesc = ACTION_DESC_LITERAL(
+    action_desc_t deactivate_monitor_actdesc = ACTION_DESC_LITERAL_PLUGMOD(
         ACTION_DEACTIVATE_MONITOR_ID,
         "Deactivate script monitor",
         nullptr,
+        this,
         "Ctrl+D",
         nullptr,
         IDAICONS::BPT_DISABLED);
 
-    action_desc_t execute_selected_script_actdesc = ACTION_DESC_LITERAL(
+    action_desc_t execute_selected_script_actdesc = ACTION_DESC_LITERAL_PLUGMOD(
         ACTION_EXECUTE_SELECTED_SCRIPT_ID,
         "Execute selected script",
         nullptr,
+        this,
         "Shift+Enter",
         nullptr,
         IDAICONS::FLASH);
@@ -1054,6 +1056,41 @@ public:
         }
     }
 
+    virtual bool idaapi run(size_t arg) override
+    {
+        switch (arg)
+        {
+            // Full UI run
+            case 0:
+            {
+                show();
+                break;
+            }
+            // Execute the selected script
+            case 1:
+            {
+                execute_last_selected_script();
+                break;
+            }
+            // Activate the scripts monitor
+            case 2:
+            {
+                activate_monitor(true);
+                refresh_chooser(QSCRIPTS_TITLE);
+                break;
+            }
+            // Deactivate the scripts monitor
+            case 3:
+            {
+                activate_monitor(false);
+                refresh_chooser(QSCRIPTS_TITLE);
+                break;
+            }
+        }
+
+        return true;
+    }
+
     virtual ~qscripts_chooser_t()
     {
         stop_monitor();
@@ -1068,63 +1105,17 @@ char qscripts_chooser_t::ACTION_DEACTIVATE_MONITOR_ID[]       = "qscripts:deacti
 char qscripts_chooser_t::ACTION_EXECUTE_SELECTED_SCRIPT_ID[]  = "qscripts:execselscript";
 char qscripts_chooser_t::ACTION_EXECUTE_SCRIPT_WITH_UNDO_ID[] = "qscripts:execscriptwithundo";
 
-qscripts_chooser_t *g_qscripts_ui;
-
 //-------------------------------------------------------------------------
 plugmod_t *idaapi init(void)
 {
-    g_qscripts_ui = new qscripts_chooser_t();
-    if (!g_qscripts_ui->start_monitor())
+    auto plg = new qscripts_chooser_t();
+    if (!plg->start_monitor())
     {
         msg("QScripts: Failed to install monitor!\n");
-        delete g_qscripts_ui;
-        g_qscripts_ui = nullptr;
-
-        return PLUGIN_SKIP;
+        delete plg;
+        plg = nullptr;
     }
-    return PLUGIN_KEEP;
-}
-
-//--------------------------------------------------------------------------
-bool idaapi run(size_t arg)
-{
-    switch (arg)
-    {
-        // Full UI run
-        case 0:
-        {
-            g_qscripts_ui->show();
-            break;
-        }
-        // Execute the selected script
-        case 1:
-        {
-            g_qscripts_ui->execute_last_selected_script();
-            break;
-        }
-        // Activate the scripts monitor
-        case 2:
-        {
-            g_qscripts_ui->activate_monitor(true);
-            refresh_chooser(g_qscripts_ui->QSCRIPTS_TITLE);
-            break;
-        }
-        // Deactivate the scripts monitor
-        case 3:
-        {
-            g_qscripts_ui->activate_monitor(false);
-            refresh_chooser(g_qscripts_ui->QSCRIPTS_TITLE);
-            break;
-        }
-    }
-
-    return true;
-}
-
-//--------------------------------------------------------------------------
-void idaapi term(void)
-{
-    delete g_qscripts_ui;
+    return plg;
 }
 
 //--------------------------------------------------------------------------
@@ -1155,10 +1146,10 @@ static const char help[] =
 plugin_t PLUGIN =
 {
     IDP_INTERFACE_VERSION,
-    0,
+    PLUGIN_MULTI,
     init,
-    term,
-    run,
+    nullptr,
+    nullptr,
     "QScripts: Develop IDA scripts faster in your favorite text editor",
     help,
     qscripts_chooser_t::QSCRIPTS_TITLE,
