@@ -191,6 +191,9 @@ struct active_script_info_t: script_info_t
 // Non-modal scripts chooser
 struct qscripts_chooser_t: public plugmod_t, public chooser_t
 {
+    using chooser_t::operator delete;
+    using chooser_t::operator new;
+
 private:
     bool m_b_filemon_timer_active;
     qtimer_t m_filemon_timer = nullptr;
