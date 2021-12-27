@@ -96,6 +96,12 @@ load_and_run_plugin("qscripts", 1);
 
 If the script monitor is deactivated, you can programmatically activate it by running the plugin with argument `2`. To deactivate again, use run argument `3`.
 
+# Building
+
+QScripts uses [idax](https://github.com/0xeb/idax) and is built using [ida-cmake](https://github.com/0xeb/ida-cmake).
+
+If you don't want to build from sources, then there are release pre-built for MS Windows.
+
 # Installation
 
 QScripts is written in C++ with IDA's SDK and therefore it should be deployed like a regular plugin. Copy the plugin binaries to either of those locations:

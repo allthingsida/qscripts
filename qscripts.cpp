@@ -21,17 +21,7 @@ scripts in your favorite editor and execute them directly in IDA.
 #include <registry.hpp>
 #pragma warning(pop)
 #include "utils_impl.cpp"
-
-namespace IDAICONS { enum
-{
-    FLASH                           = 171,          // Flash icon
-    FLASH_EDIT                      = 173,          // A flash icon with the pencil on it
-    BPT_DISABLED                    = 62,           // A gray filled circle crossed (disabled breakpoint)
-    EYE_GLASSES_EDIT                = 43,           // Eye glasses with a small pencil overlay
-    RED_DOT                         = 59,           // Filled red circle (used to designate an active breakpoint)
-    GRAPH_WITH_FUNC                 = 78,           // Nodes in a graph icon with a smaller function icon overlapped on top of the graph
-    GRAY_X_CIRCLE                   = 175,          // A filled gray circle with an X in it
-}; }
+#include <idax/xkernwin.hpp>
 
 //-------------------------------------------------------------------------
 // Some constants
@@ -212,9 +202,11 @@ struct qscripts_chooser_t: public plugmod_t, public chooser_t
     using chooser_t::operator new;
 
 private:
+    action_manager_t am;
+
     bool m_b_filemon_timer_active;
     qtimer_t m_filemon_timer = nullptr;
-    static std::regex RE_EXPANDER;
+    const std::regex RE_EXPANDER = std::regex(R"(\$(.+?)\$)");
 
     int opt_change_interval  = 500;
     int opt_clear_log        = 0;
@@ -268,7 +260,7 @@ private:
         // Add the dependency file to the active script
         selected_script.add_dep_index(dep_file.c_str());
 
-        static auto get_value = [](const char* str, char* key, int key_len) -> const char *
+        static auto get_value = [](const char* str, const char* key, int key_len) -> const char *
         {
             if (strncmp(str, key, key_len) != 0)
                 return nullptr;
@@ -706,115 +698,21 @@ protected:
         CH_KEEP    | CH_RESTORE  | CH_ATTRS   |
         CH_CAN_DEL | CH_CAN_EDIT | CH_CAN_INS | CH_CAN_REFRESH;
 
-    static int widths_[2];
-    static const char *const header_[2];
+    static constexpr int widths_[2]               = { 20, 70 };
+    static constexpr const char *const header_[2] = { "Script", "Path" };
 
-    static char ACTION_DEACTIVATE_MONITOR_ID[];
-    static char ACTION_EXECUTE_SELECTED_SCRIPT_ID[];
-    static char ACTION_EXECUTE_SCRIPT_WITH_UNDO_ID[];
+    static constexpr const char *ACTION_DEACTIVATE_MONITOR_ID        = "qscripts:deactivatemonitor";
+    static constexpr const char *ACTION_EXECUTE_SELECTED_SCRIPT_ID   = "qscripts:execselscript";
+    static constexpr const char *ACTION_EXECUTE_SCRIPT_WITH_UNDO_ID  = "qscripts:execscriptwithundo";
 
     scripts_info_t m_scripts;
     ssize_t m_nselected = NO_SELECTION;
 
-    struct qscript_action_handler_t: action_handler_t
+    static bool is_correct_widget(action_update_ctx_t* ctx)
     {
-    protected:
-        qscripts_chooser_t *ch;
+        return ctx->widget_title == QSCRIPTS_TITLE;
+    }
 
-        bool is_correct_widget(action_update_ctx_t *ctx)
-        {
-            return ctx->widget_title == ch->title;
-        }
-    public:
-        bool setup(qscripts_chooser_t *ch, action_desc_t &action_desc)
-        {
-            this->ch = ch;
-            action_desc.handler = this;
-            return register_action(action_desc);
-        }
-    };
-
-    struct deactivate_script_ah_t: qscript_action_handler_t
-    {
-        virtual action_state_t idaapi update(action_update_ctx_t *ctx) override
-        {
-            if (!is_correct_widget(ctx))
-                return AST_DISABLE_FOR_WIDGET;
-            else
-                return ch->is_monitor_active() ? AST_ENABLE : AST_DISABLE;
-        }
-
-        virtual int idaapi activate(action_activation_ctx_t *ctx) override
-        {
-            ch->clear_selected_script();
-            refresh_chooser(QSCRIPTS_TITLE);
-            return 1;
-        }
-    };
-
-    struct exec_selected_script_ah_t: qscript_action_handler_t
-    {
-        virtual action_state_t idaapi update(action_update_ctx_t *ctx) override
-        {
-            if (!is_correct_widget(ctx))
-                return AST_DISABLE_FOR_WIDGET;
-            else
-                return ctx->chooser_selection.empty() ? AST_DISABLE : AST_ENABLE;
-        }
-
-        virtual int idaapi activate(action_activation_ctx_t *ctx) override
-        {
-            if (!ctx->chooser_selection.empty())
-                ch->execute_script_at(ctx->chooser_selection.at(0));
-            return 1;
-        }
-    };
-
-    struct execute_script_ah_t: qscript_action_handler_t
-    {
-        virtual action_state_t idaapi update(action_update_ctx_t *ctx) override
-        {
-            return ch->has_selected_script() ? AST_ENABLE : AST_DISABLE;
-        }
-
-        virtual int idaapi activate(action_activation_ctx_t *ctx) override
-        {
-            ch->execute_last_selected_script(false);
-            return 1;
-        }
-    };
-
-    deactivate_script_ah_t    deactivate_monitor_ah;
-    exec_selected_script_ah_t execute_selected_script_ah;
-    execute_script_ah_t       execute_script_with_undo_ah;
-
-    action_desc_t deactivate_monitor_actdesc = ACTION_DESC_LITERAL_PLUGMOD(
-        ACTION_DEACTIVATE_MONITOR_ID,
-        "Deactivate script monitor",
-        nullptr,
-        this,
-        "Ctrl+D",
-        nullptr,
-        IDAICONS::BPT_DISABLED);
-
-    action_desc_t execute_selected_script_actdesc = ACTION_DESC_LITERAL_PLUGMOD(
-        ACTION_EXECUTE_SELECTED_SCRIPT_ID,
-        "Execute selected script",
-        nullptr,
-        this,
-        "Shift+Enter",
-        nullptr,
-        IDAICONS::FLASH);
-
-    action_desc_t execute_script_with_undo_actdesc = ACTION_DESC_LITERAL_OWNER(
-        ACTION_EXECUTE_SCRIPT_WITH_UNDO_ID,
-        "QScripts monitor: execute script",
-        nullptr,
-        &PLUGIN,
-        "Alt-Shift-X",
-        nullptr,
-        IDAICONS::FLASH,
-        ADF_OT_PLUGIN);
 
     // Add a new script file and properly populate its script info object
     // and returns a borrowed reference
@@ -997,10 +895,6 @@ protected:
 
     void idaapi closed() override
     {
-        unregister_action(ACTION_DEACTIVATE_MONITOR_ID);
-        unregister_action(ACTION_EXECUTE_SELECTED_SCRIPT_ID);
-        unregister_action(ACTION_EXECUTE_SCRIPT_WITH_UNDO_ID);
-
         saveload_options(true);
     }
 
@@ -1027,22 +921,71 @@ protected:
         filter.append("\nSelect script file to load");
     }
 
-    // Initializes the chooser and populates the script files from the last run
-    bool init() override
+    void setup_ui()
     {
-        deactivate_monitor_ah.setup(this, deactivate_monitor_actdesc);
-        execute_selected_script_ah.setup(this, execute_selected_script_actdesc);
-        execute_script_with_undo_ah.setup(this, execute_script_with_undo_actdesc);
-        return true;
+        am.add_action(
+            AMAHF_NONE,
+            ACTION_DEACTIVATE_MONITOR_ID,
+            "Deactivate script monitor",
+            "Ctrl+D",
+            FO_ACTION_UPDATE([this],
+                if (!this->is_correct_widget(ctx))
+                    return AST_DISABLE_FOR_WIDGET;
+                else
+                    return this->is_monitor_active() ? AST_ENABLE : AST_DISABLE;
+            ),
+            FO_ACTION_ACTIVATE([this]) {
+                this->clear_selected_script();
+                refresh_chooser(QSCRIPTS_TITLE);
+                return 1;
+            },
+            nullptr,
+            IDAICONS::BPT_DISABLED);
+
+        am.add_action(
+            AMAHF_NONE,
+            ACTION_EXECUTE_SELECTED_SCRIPT_ID,
+            "Execute selected script",
+            "Shift+Enter",
+            FO_ACTION_UPDATE([this],
+                if (!this->is_correct_widget(ctx))
+                    return AST_DISABLE_FOR_WIDGET;
+                else
+                    return ctx->chooser_selection.empty() ? AST_ENABLE : AST_DISABLE;
+            ),
+            FO_ACTION_ACTIVATE([this]) {
+                if (!ctx->chooser_selection.empty())
+                    this->execute_script_at(ctx->chooser_selection.at(0));
+                return 1;
+            },
+            "Execute script without activating it",
+            IDAICONS::FLASH);
+
+        am.add_action(
+            AMAHF_NONE,
+            ACTION_EXECUTE_SCRIPT_WITH_UNDO_ID,
+            "QScripts monitor: execute last active script",
+            "Alt-Shift-X",
+            FO_ACTION_UPDATE([this],
+                return this->has_selected_script() ? AST_ENABLE : AST_DISABLE;
+            ),
+            FO_ACTION_ACTIVATE([this]) {
+                if (this->has_selected_script())
+                    this->execute_script_sync(&selected_script);
+                return 1;
+            },
+            "An action to programmatically execute the active script",
+            IDAICONS::FLASH);
     }
 
 public:
-    static const char *QSCRIPTS_TITLE;
+    static constexpr const char *QSCRIPTS_TITLE = "QScripts";
 
     qscripts_chooser_t(const char *title_ = QSCRIPTS_TITLE)
-        : chooser_t(flags_, qnumber(widths_), widths_, header_, title_)
+        : chooser_t(flags_, qnumber(widths_), widths_, header_, title_), am(this)
     {
         popup_names[POPUP_EDIT] = "~O~ptions";
+        setup_ui();
     }
 
     bool activate_monitor(bool activate = true)
@@ -1184,14 +1127,6 @@ public:
         stop_monitor();
     }
 };
-
-std::regex qscripts_chooser_t::RE_EXPANDER                    = std::regex(R"(\$(.+?)\$)");
-int qscripts_chooser_t::widths_[2]                            = { 20, 70 };
-const char *const qscripts_chooser_t::header_[2]              = { "Script", "Path"};
-const char *qscripts_chooser_t::QSCRIPTS_TITLE                = "QScripts";
-char qscripts_chooser_t::ACTION_DEACTIVATE_MONITOR_ID[]       = "qscripts:deactivatemonitor";
-char qscripts_chooser_t::ACTION_EXECUTE_SELECTED_SCRIPT_ID[]  = "qscripts:execselscript";
-char qscripts_chooser_t::ACTION_EXECUTE_SCRIPT_WITH_UNDO_ID[] = "qscripts:execscriptwithundo";
 
 //-------------------------------------------------------------------------
 plugmod_t *idaapi init(void)

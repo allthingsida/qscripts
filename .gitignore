@@ -1,9 +1,8 @@
 obj/
 __pycache__/
-build/
-build64/
+build*/
 .vs/
 Debug/
-x64/
 Release/
+x64/
 BINARIES/
