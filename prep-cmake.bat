@@ -11,6 +11,12 @@ if not defined IDASDK (
     goto :eof
 )
 
+if not exist %IDASDK%\include\idax\xkernwin.hpp (
+    echo IDAX framework not properly installed in the IDA SDK folder.
+    echo See: https://github.com/0xeb/idax
+    goto :eof
+)
+
 if not exist build (
     mkdir build
     pushd build
