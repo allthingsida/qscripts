@@ -726,11 +726,11 @@ protected:
             return ctx->widget_title == ch->title;
         }
     public:
-        void setup(qscripts_chooser_t *ch, action_desc_t &action_desc)
+        bool setup(qscripts_chooser_t *ch, action_desc_t &action_desc)
         {
             this->ch = ch;
             action_desc.handler = this;
-            register_action(action_desc);
+            return register_action(action_desc);
         }
     };
 
@@ -774,7 +774,7 @@ protected:
     {
         virtual action_state_t idaapi update(action_update_ctx_t *ctx) override
         {
-            return AST_ENABLE;
+            return ch->has_selected_script() ? AST_ENABLE : AST_DISABLE;
         }
 
         virtual int idaapi activate(action_activation_ctx_t *ctx) override
