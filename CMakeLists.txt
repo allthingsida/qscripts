@@ -8,7 +8,7 @@ list(APPEND DISABLED_SOURCES utils_impl.cpp)
 set(PLUGIN_NAME              qscripts)
 set(PLUGIN_SOURCES           qscripts.cpp ${DISABLED_SOURCES})
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include($ENV{IDASDK}/ida-cmake/plugins.cmake)
