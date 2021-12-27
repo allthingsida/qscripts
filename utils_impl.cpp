@@ -50,6 +50,28 @@ void normalize_path_sep(qstring &path)
 }
 
 //-------------------------------------------------------------------------
+void make_abs_path(qstring& path, const char* base_dir = nullptr, bool normalize = false)
+{
+    if (qisabspath(path.c_str()))
+        return;
+
+    auto old_cwd = std::filesystem::current_path();
+    if (base_dir == nullptr)
+    {
+        path = old_cwd.string().c_str();
+    }
+    else
+    {
+        std::filesystem::current_path(base_dir);
+        auto abs = std::filesystem::absolute(path.c_str());
+        path = abs.string().c_str();
+        std::filesystem::current_path(old_cwd);
+    }
+    if (normalize)
+        normalize_path_sep(path);
+}
+
+//-------------------------------------------------------------------------
 bool get_basename_and_ext(
     const char *path, 
     char **basename,
@@ -62,6 +84,12 @@ bool get_basename_and_ext(
         return ++(*basename), true;
     else
         return false;
+}
+
+//-------------------------------------------------------------------------
+inline void get_current_directory(qstring &dir)
+{
+    dir = std::filesystem::current_path().string().c_str();
 }
 
 //-------------------------------------------------------------------------

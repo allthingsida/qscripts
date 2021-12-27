@@ -1,2 +1,2 @@
-/reload reload($basename$)
+/reload import importlib;importlib.reload($basename$)
 t2.py

@@ -9,6 +9,7 @@ scripts in your favorite editor and execute them directly in IDA.
 #include <unordered_map>
 #include <string>
 #include <regex>
+#include <filesystem>
 #pragma warning(push)
 #pragma warning(disable: 4267 4244)
 #include <loader.hpp>
@@ -39,6 +40,14 @@ static constexpr char IDAREG_RECENT_SCRIPTS[]   = "RecentScripts";
 static constexpr char UNLOAD_SCRIPT_FUNC_NAME[] = "__quick_unload_script";
 
 //-------------------------------------------------------------------------
+// File modification state
+enum class filemod_status_e
+{
+    not_found,
+    not_modified,
+    modified
+};
+
 // Structure to describe a file and its metadata
 struct fileinfo_t
 {
@@ -73,38 +82,48 @@ struct fileinfo_t
     // -1: file no longer exists
     //  0: no modification
     //  1: modified
-    int get_modification_status(bool update_mtime=true)
+    filemod_status_e get_modification_status(bool update_mtime=true)
     {
         qtime64_t cur_mtime;
         const char *script_file = this->file_path.c_str();
         if (!get_file_modification_time(script_file, &cur_mtime))
-            return -1;
+            return filemod_status_e::not_found;
 
         // Script is up to date, no need to execute it again
         if (cur_mtime == modified_time)
-            return 0;
+            return filemod_status_e::not_modified;
 
         if (update_mtime)
             modified_time = cur_mtime;
 
-        return 1;
+        return filemod_status_e::modified;
+    }
+
+    void invalidate()
+    {
+        modified_time = 0;
     }
 };
 
-// Script file
-using script_info_t = fileinfo_t;
-// Script files
-using scripts_info_t = qvector<script_info_t>;
-
+//-------------------------------------------------------------------------
 // Dependency script info
-struct dep_script_info_t: fileinfo_t
+struct script_info_t: fileinfo_t
 {
+    using fileinfo_t::fileinfo_t;
+
     // Each dependency script can have its own reload command
     qstring reload_cmd;
+
+    // Base path if this dependency is part of a package
+    qstring pkg_base;
 
     const bool has_reload_directive() const { return !reload_cmd.empty(); }
 };
 
+// Script files
+using scripts_info_t = qvector<script_info_t>;
+
+//-------------------------------------------------------------------------
 // Active script information along with its dependencies
 struct active_script_info_t: script_info_t
 {
@@ -115,12 +134,13 @@ struct active_script_info_t: script_info_t
     qvector<fileinfo_t> dep_indices;
 
     // The list of dependency scripts
-    std::unordered_map<std::string, dep_script_info_t> dep_scripts;
+    std::unordered_map<std::string, script_info_t> dep_scripts;
 
     // Checks to see if we have a dependency on a given file
-    const bool has_dep(const std::string &dep_file) const
+    const script_info_t *has_dep(const std::string &dep_file) const
     {
-        return dep_scripts.find(dep_file) != dep_scripts.end();
+        auto p = dep_scripts.find(dep_file);
+        return p == dep_scripts.end() ? nullptr : &p->second;
     }
 
     // Is this trigger based or dependency based?
@@ -129,13 +149,13 @@ struct active_script_info_t: script_info_t
     // If no dependency index files have been modified, return 0.
     // Return 1 if one of them has been modified or -1 if one of them has gone missing.
     // In both latter cases, we have to recompute our dependencies
-    int is_any_dep_index_modified(bool update_mtime = true)
+    filemod_status_e is_any_dep_index_modified(bool update_mtime = true)
     {
-        int r = 0;
+        filemod_status_e r = filemod_status_e::not_modified;
         for (auto &dep_file: dep_indices)
         {
             r = dep_file.get_modification_status(update_mtime);
-            if (r != 0)
+            if (r != filemod_status_e::not_modified)
                 break;
         }
         return r;
@@ -170,11 +190,8 @@ struct active_script_info_t: script_info_t
         dep_indices.qclear();
         dep_scripts.clear();
         trigger_file.clear();
-    }
-
-    void invalidate()
-    {
-        modified_time = 0;
+        reload_cmd.clear();
+        pkg_base.clear();
     }
 
     void invalidate_all_scripts()
@@ -183,7 +200,7 @@ struct active_script_info_t: script_info_t
 
         // Invalidate all but the index file itself
         for (auto &kv: dep_scripts)
-            kv.second.modified_time = 0;
+            kv.second.invalidate();
     }
 };
 
@@ -207,6 +224,18 @@ private:
 
     active_script_info_t selected_script;
 
+    struct expand_ctx_t
+    {
+	    // input
+        qstring script_file;
+		bool    main_file;
+		
+		// working
+        qstring base_dir;
+        qstring pkg_base;
+        qstring reload_cmd;
+    };
+
     inline int normalize_filemon_interval(const int change_interval) const
     {
         return qmax(300, change_interval);
@@ -217,85 +246,104 @@ private:
         return selected_script.file_path.c_str();
     }
 
-    bool parse_deps_for_script(const char *script_file, bool main_file=true)
+    bool parse_deps_for_script(expand_ctx_t &ctx)
     {
         // Parse the dependency index file
         qstring dep_file;
-        dep_file.sprnt("%s.deps.qscripts", script_file);
+        dep_file.sprnt("%s.deps.qscripts", ctx.script_file.c_str());
         FILE *fp = qfopen(dep_file.c_str(), "r");
         if (fp == nullptr)
         {
-            dep_file.sprnt("%s.proj.qscripts", script_file);
+            dep_file.sprnt("%s.proj.qscripts", ctx.script_file.c_str());
             fp = qfopen(dep_file.c_str(), "r");
             if (fp == nullptr)
                 return false;
         }
 
+        // Get the dependency file directory
+        ctx.base_dir.resize(dep_file.size());
+        qdirname(ctx.base_dir.begin(), ctx.base_dir.size(), dep_file.c_str());
+		ctx.base_dir.resize(strlen(ctx.base_dir.c_str()));
+
         // Add the dependency file to the active script
         selected_script.add_dep_index(dep_file.c_str());
 
-        qstring reload_cmd;
+        static auto get_value = [](const char* str, char* key, int key_len) -> const char *
+        {
+            if (strncmp(str, key, key_len) != 0)
+                return nullptr;
+            // Clear value
+            if (str[key_len] == '\0')
+                return "";
+            else
+                return str + key_len + 1;
+        };
+
         // Parse each line
         for (qstring line = dep_file; qgetline(&line, fp) != -1;)
         {
             line.trim2();
 
-            // Skip comment lines
-            if (strncmp(line.c_str(), "//", 2) == 0)
+            // Skip comment lines (';', '//' and '#')
+            if (line.empty() || strncmp(line.c_str(), "//", 2) == 0 || line[0] == '#' || line[0] == ';')
                 continue;
 
-            // Parse special directives for the main index file only
-            if (main_file)
+            // Parse special directives (some apply only for the main selected script)
+            if (auto val = get_value(line.c_str(), "/pkgbase", 8))
             {
-                if (strncmp(line.c_str(), "/reload ", 8) == 0)
+                if (ctx.main_file)
                 {
-                    reload_cmd = line.c_str() + 8;
-                    continue;
+                    ctx.pkg_base = val;
+                    make_abs_path(ctx.pkg_base, ctx.base_dir.c_str(), true);
                 }
-                else if (strncmp(line.c_str(), "/triggerfile ", 13) == 0)
+                continue;
+            }
+            else if (auto val = get_value(line.c_str(), "/reload", 7))
+            {
+                if (ctx.main_file)
+                    ctx.reload_cmd = val;
+                continue;
+            }
+            else if (auto val = get_value(line.c_str(), "/triggerfile", 12))
+            {
+                if (ctx.main_file)
                 {
-                    selected_script.trigger_file = line.c_str() + 13;
-                    expand_file_name(selected_script.trigger_file, script_file);
-                    continue;
+                    selected_script.trigger_file = val;
+                    expand_file_name(selected_script.trigger_file, ctx);
                 }
+                continue;
             }
 
-            // From here on, any other line is an expandable string leading to a script file
-            expand_file_name(line, script_file);
+            // From here on, the *line* variable is an expandable string leading to a script file
+            ctx.script_file = line;
+            expand_file_name(line, ctx);
 
             // Skip dependency scripts that (do not|no longer) exist
-            dep_script_info_t dep_script;
+            script_info_t dep_script;
             if (!get_file_modification_time(line, &dep_script.modified_time))
                 continue;
 
             // Add script
             dep_script.file_path  = line.c_str();
-            dep_script.reload_cmd = reload_cmd;
+            dep_script.reload_cmd = ctx.reload_cmd;
+            dep_script.pkg_base   = ctx.pkg_base;
+
             selected_script.dep_scripts[line.c_str()] = std::move(dep_script);
 
-            parse_deps_for_script(line.c_str(), false);
+            expand_ctx_t sub_ctx = ctx;
+            sub_ctx.script_file  = line;
+			sub_ctx.main_file    = false;
+            parse_deps_for_script(sub_ctx);
         }
         qfclose(fp);
 
         return true;
     }
 
-    void expand_file_name(qstring &filename, const char *templ_file)
+    void expand_file_name(qstring &filename, const expand_ctx_t &ctx)
     {
-        expand_string(filename, filename, templ_file);
-
-        if (!qisabspath(filename.c_str()))
-        {
-            qstring dir_name = templ_file;
-            qdirname(dir_name.begin(), dir_name.size(), templ_file);
-
-            qstring full_path;
-            full_path.sprnt("%s" SDIRCHAR "%s", dir_name.c_str(), filename.c_str());
-            filename = full_path;
-        }
-
-        // Always normalize the final script path
-        normalize_path_sep(filename);
+        expand_string(filename, filename, ctx);
+        make_abs_path(filename, ctx.base_dir.c_str(), true);
     }
 
     void set_selected_script(script_info_t &script)
@@ -304,7 +352,8 @@ private:
         selected_script = script;
 
         // Recursively parse the dependencies and the index files
-        parse_deps_for_script(script.file_path.c_str(), true);
+        expand_ctx_t main_ctx = { script.file_path.c_str(), true };
+        parse_deps_for_script(main_ctx);
     }
 
     void clear_selected_script()
@@ -321,24 +370,49 @@ private:
 
     bool is_monitor_active() const { return m_b_filemon_timer_active; }
 
-    bool is_using_trigger_file()
-    {
-        return has_selected_script() && !selected_script.trigger_file.empty();
-    }
-
-    void expand_string(qstring &input, qstring &output, const char *script_file)
+    // Dynamic string expansion
+	// ------------------------
+    // basename                       Returns the basename of the input file
+    // env:Variable_Name              Expands the 'Variable_Name'
+    // pkgbase                        Sets the current pkgbase path
+    // pkgmodname                     Expands the file name using the pckbase into the form: 'module.submodule1.submodule2'
+    void expand_string(qstring &input, qstring &output, const expand_ctx_t& ctx)
     {
         output = std::regex_replace(
             input.c_str(),
             RE_EXPANDER,
-            [this, script_file](auto &m) -> std::string
+            [this, ctx](auto &m) -> std::string
             {
                 qstring match1 = m.str(1).c_str();
-                if (strncmp(match1.c_str(), "basename", 8) == 0)
+
+                if (strncmp(match1.c_str(), "pkgmodname", 10) == 0)
+                {
+                    auto dep_file = selected_script.has_dep(ctx.script_file.c_str());
+                    qstring pkg_base = dep_file == nullptr ? selected_script.pkg_base : dep_file->pkg_base;
+
+                    // If the script file is in the package base, then replace the path separators with '.'
+                    if (strncmp(ctx.script_file.c_str(), pkg_base.c_str(), pkg_base.length()) == 0)
+                    {
+                        qstring s = ctx.script_file.c_str() + pkg_base.length() + 1;
+                        s.replace(SDIRCHAR, ".");
+                        // Drop the extension too
+                        auto idx = s.rfind('.');
+                        if (idx != -1)
+                            s.resize(idx);
+
+                        return s.c_str();
+                    }
+                    return "";
+                }
+                else if (strncmp(match1.c_str(), "pkgbase", 7) == 0)
+                {
+                    return ctx.pkg_base.c_str();
+                }
+                else if (strncmp(match1.c_str(), "basename", 8) == 0)
                 {
                     char *basename, *ext;
                     qstring wrk_str;
-                    get_basename_and_ext(script_file, &basename, &ext, wrk_str);
+                    get_basename_and_ext(ctx.script_file.c_str(), &basename, &ext, wrk_str);
                     return basename;
                 }
                 else if (strncmp(match1.c_str(), "env:", 4) == 0)
@@ -352,7 +426,10 @@ private:
         ).c_str();
     }
 
-    bool execute_reload_directive(dep_script_info_t &dep_script_file, qstring &err)
+    bool execute_reload_directive(
+	    script_info_t &dep_script_file, 
+		qstring &err, 
+		bool silent=true)
     {
         const char *script_file = dep_script_file.file_path.c_str();
 
@@ -367,14 +444,17 @@ private:
             }
 
             qstring reload_cmd;
-            expand_string(dep_script_file.reload_cmd, reload_cmd, script_file);
+            expand_ctx_t ctx;
+            ctx.script_file = script_file;
+            expand_string(dep_script_file.reload_cmd, reload_cmd, ctx);
 
             if (!elang->eval_snippet(reload_cmd.c_str(), &err))
                 break;
             return true;
         } while (false);
 
-        msg("QScripts failed to reload script file: '%s':\n%s", script_file, err.c_str());
+        if (!silent)
+            msg("QScripts failed to reload script file: '%s':\n%s", script_file, err.c_str());
 
         return false;
     }
@@ -559,7 +639,7 @@ private:
 
             // Let's check the dependencies index files first
             auto mod_stat = selected_script.is_any_dep_index_modified();
-            if (mod_stat == 1)
+            if (mod_stat == filemod_status_e::modified)
             {
                 // Force re-parsing of the index file
                 dep_scripts.clear();
@@ -575,19 +655,21 @@ private:
                 return 1; // (1 ms)
             }
             // Dependency index file is gone
-            else if (mod_stat == -1 && !dep_scripts.empty())
+            else if (mod_stat == filemod_status_e::not_found && !dep_scripts.empty())
             {
                 // Let's just check the active script
                 dep_scripts.clear();
             }
 
+            //
             // Check the dependency scripts
+            //
             bool dep_script_changed = false;
             bool brk = false;
             for (auto &kv: dep_scripts)
             {
                 auto &dep_script = kv.second;
-                if (dep_script.get_modification_status() == 1)
+                if (dep_script.get_modification_status() == filemod_status_e::modified)
                 {
                     qstring err;
                     dep_script_changed = true;
@@ -604,7 +686,7 @@ private:
                 break;
 
             // Check the main script
-            if ((mod_stat = selected_script.get_modification_status()) == -1)
+            if ((mod_stat = selected_script.get_modification_status()) == filemod_status_e::not_found)
             {
                 // Script no longer exists
                 msg("QScripts detected that the active script '%s' no longer exists!\n", get_selected_script_file());
@@ -613,7 +695,7 @@ private:
             }
 
             // Script or its dependencies changed?
-            if (dep_script_changed || mod_stat == 1)
+            if (dep_script_changed || mod_stat == filemod_status_e::modified)
                 execute_script(&selected_script, opt_with_undo);
         } while (false);
         return opt_change_interval;
@@ -726,7 +808,7 @@ protected:
 
     action_desc_t execute_script_with_undo_actdesc = ACTION_DESC_LITERAL_OWNER(
         ACTION_EXECUTE_SCRIPT_WITH_UNDO_ID,
-        "QScript monitor: execute script",
+        "QScripts monitor: execute script",
         nullptr,
         &PLUGIN,
         "Alt-Shift-X",
@@ -771,7 +853,8 @@ protected:
             "<#Clear the output window before re-running the script#C~l~ear the output window:C>\n"
             "<#Display the name of the file that is automatically executed#Show ~f~ile name when execution:C>\n"
             "<#Execute a function called '__quick_unload_script' before reloading the script#Execute the u~n~load script function:C>\n"
-            "<#The executed scripts' side effects can be reverted with IDA's Undo#Enable ~u~ndo QScript execute script support:C>>\n"
+            "<#The executed scripts' side effects can be reverted with IDA's Undo#Allow QScripts execution to be ~u~ndo-able:C>>\n"
+                                                                                  
             "\n"
             "\n";
 
@@ -849,12 +932,14 @@ protected:
                 *icon = IDAICONS::RED_DOT;
             }
         }
-        else if (is_monitor_active() && selected_script.has_dep(si->file_path))
+        else if (is_monitor_active() && selected_script.has_dep(si->file_path) != nullptr)
         {
+            // Mark as a dependency
             *icon = IDAICONS::EYE_GLASSES_EDIT;
         }
         else
         {
+            // Mark as an inactive file
             *icon = IDAICONS::GRAY_X_CIRCLE;
         }
     }
@@ -1135,12 +1220,6 @@ static const char help[] =
     __DATE__ " " __TIME__ "\n"
     "\n";
 
-#ifdef _DEBUG
-    static const char wanted_hotkey[] = "Alt-Shift-A";
-#else
-    static const char wanted_hotkey[] = "Alt-Shift-F9";
-#endif
-
 //--------------------------------------------------------------------------
 //
 //      PLUGIN DESCRIPTION BLOCK
@@ -1156,5 +1235,9 @@ plugin_t PLUGIN =
     "QScripts: Develop IDA scripts faster in your favorite text editor",
     help,
     qscripts_chooser_t::QSCRIPTS_TITLE,
-    wanted_hotkey
+#ifdef _DEBUG
+    "Alt-Shift-A"
+#else
+    "Alt-Shift-F9"
+#endif
 };

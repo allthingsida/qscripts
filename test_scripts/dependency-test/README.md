@@ -2,7 +2,7 @@ This is a dependency test folder.
 
 The script `t1.py` has its dependency index file which describes the reload directive and one dependency on `t2.py`:
 ```
-/reload reload($basename$)
+/reload import importlib;importlib.reload($basename$)
 t2.py
 ```
 
@@ -17,5 +17,4 @@ The script `t4.py` has a single relative dependency in its index file:
 t5.py
 ```
 
-
-If you activate `t1.py` from QScripts in IDA, then changing any of the files and their indices will re-invoke `t1.py` and perhaps `reload` the changed modules.
+If you activate `t1.py` from QScripts in IDA, then changing any of the files or their dependency files, then the changed dependencies will be reloaded (using the reload syntax) and the active script is executed again.

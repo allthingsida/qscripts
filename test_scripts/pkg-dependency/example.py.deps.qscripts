@@ -1,0 +1,10 @@
+# Non package dependencies first
+/reload import importlib;importlib.reload($basename$)
+dep.py
+
+# Package dependencies
+/pkgbase C:\Python38\Lib\site-packages
+/reload import importlib;import $pkgmodname$;importlib.reload($pkgmodname$)
+
+$pkgbase$\PIL\BlpImagePlugin.py
+$pkgbase$\PIL\ContainerIO.py
