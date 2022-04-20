@@ -951,7 +951,7 @@ protected:
                 if (!this->is_correct_widget(ctx))
                     return AST_DISABLE_FOR_WIDGET;
                 else
-                    return ctx->chooser_selection.empty() ? AST_ENABLE : AST_DISABLE;
+                    return ctx->chooser_selection.empty() ? AST_DISABLE : AST_ENABLE;
             ),
             FO_ACTION_ACTIVATE([this]) {
                 if (!ctx->chooser_selection.empty())
