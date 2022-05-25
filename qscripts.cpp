@@ -562,7 +562,7 @@ private:
     // Save or load the options
     void saveload_options(bool bsave, int what_ids = OPTID_ALL)
     {
-        enum { STD_STR = 1000 };
+        enum { QSTR = 1000 };
         struct options_t
         {
             int id;
@@ -575,7 +575,7 @@ private:
             {OPTID_CLEARLOG,   "QScripts_clearlog",             VT_LONG, &opt_clear_log},
             {OPTID_SHOWNAME,   "QScripts_showscriptname",       VT_LONG, &opt_show_filename},
             {OPTID_UNLOADEXEC, "QScripts_exec_unload_func",     VT_LONG, &opt_exec_unload_func},
-            {OPTID_SELSCRIPT,  "QScripts_selected_script_name", STD_STR, &selected_script.file_path},
+            {OPTID_SELSCRIPT,  "QScripts_selected_script_name", QSTR, &selected_script.file_path},
             {OPTID_WITHUNDO,   "QScripts_with_undo",            VT_LONG, &opt_with_undo}
         };
 
@@ -598,17 +598,17 @@ private:
                 else
                     reg_read_string(((qstring *)opt.pval), opt.name);
             }
-            else if (opt.vtype == STD_STR)
+            else if (opt.vtype == QSTR)
             {
                 if (bsave)
                 {
-                    reg_write_string(opt.name, ((std::string *)opt.pval)->c_str());
+                    reg_write_string(opt.name, ((qstring *)opt.pval)->c_str());
                 }
                 else
                 {
                     qstring tmp;
                     reg_read_string(&tmp, opt.name);
-                    *((std::string *)opt.pval) = tmp.c_str();
+                    *((qstring *)opt.pval) = tmp.c_str();
                 }
             }
         }
