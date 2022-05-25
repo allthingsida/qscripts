@@ -90,6 +90,8 @@ You may pass the `/keep` option so QScripts does not delete your trigger file, f
 /triggerfile /keep dont_del_me.info
 ```
 
+Please check the [trigger-native](test_scripts/trigger-native/) example.
+
 ## Using QScripts programmatically
 
 It is possible to invoke QScripts from a script. For instance, in IDAPython, you can execute the last selected script with:
