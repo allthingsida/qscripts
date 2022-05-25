@@ -1,22 +1,22 @@
 # What is QScripts?
 
-`QScripts` is productivity tool and an alternative to IDA's "Recent scripts" (Alt-F9) and "Execute Scripts" (Shift-F2) facilities. `QScripts` allows you to develop and run any supported scripting language (\*.py; \*.idc, etc.) from the comfort of your own favorite text editor as soon as you save the active script, the trigger file or any of its dependencies.
+QScripts is productivity tool and an alternative to IDA's "Recent scripts" (Alt-F9) and "Execute Scripts" (Shift-F2) facilities. QScripts allows you to develop and run any supported scripting language (\*.py; \*.idc, etc.) from the comfort of your own favorite text editor as soon as you save the active script, the trigger file or any of its dependencies.
 
 ![Quick introduction](docs/_resources/qscripts-vid-1.gif)
 
 # Usage
 
-Invoke `QScripts` from the plugins menu, press Ctrl-3 or its default hotkey Alt-Shift-F9.
+Invoke QScripts from the plugins menu, press Ctrl-3 or its default hotkey Alt-Shift-F9.
 When it runs, the scripts list might be empty. Just press `Ins` and select a script to add, or press `Del` to delete a script from the list.
-`QScripts` shares the same scripts list as IDA's `Recent Scripts` window.
+QScripts shares the same scripts list as IDA's `Recent Scripts` window.
 
 To execute a script, just press `ENTER` or double-click it. After running a script once, it will become the active script (shown in **bold**).
 
-An active script will then be monitored for changes. If you modify the script in your favorite text editor and save it, then `QScripts` will execute the script for you automatically in IDA.
+An active script will then be monitored for changes. If you modify the script in your favorite text editor and save it, then QScripts will execute the script for you automatically in IDA.
 
-To deactivate a script, just press `Ctrl-D` or right-click and choose `Deactivate script monitor` from the `QScripts` window. When an active script becomes inactive, it will be shown in *italics*.
+To deactivate a script, just press `Ctrl-D` or right-click and choose `Deactivate script monitor` from the QScripts window. When an active script becomes inactive, it will be shown in *italics*.
 
-There are few options that can be configured in `QScripts`. Just press `Ctrl+E` or right-click and select `Options`:
+There are few options that can be configured in QScripts. Just press `Ctrl+E` or right-click and select `Options`:
 
 * Clear message window before execution: clear the message log before re-running the script. Very handy if you to have a fresh output log each time.
 * Show file name when execution: display the name of the file that is automatically executed
@@ -26,11 +26,11 @@ There are few options that can be configured in `QScripts`. Just press `Ctrl+E` 
 
 ## Executing a script without activating it
 
-It is possible to execute a script from `QScripts` without having to activate it. Just press `Shift-ENTER` on a script and it will be executed.
+It is possible to execute a script from QScripts without having to activate it. Just press `Shift-ENTER` on a script and it will be executed.
 
 ## Working with dependencies
 
-It is possible to instruct `QScripts` to re-execute the active script if any of its dependent scripts are also modified. To use the automatic dependency system, please create a file named exactly like your active script but with the additional `.deps.qscripts` extension. In that file you put your dependent scripts path.
+It is possible to instruct QScripts to re-execute the active script if any of its dependent scripts are also modified. To use the automatic dependency system, please create a file named exactly like your active script but with the additional `.deps.qscripts` extension. In that file you put your dependent scripts path.
 
 When using Python, it would be helpful if we can also [reload](https://docs.python.org/3/library/importlib.html#importlib.reload) the changed dependent script from the active script automatically. To do that, simply add the directive line `/reload` along with the desired reload syntax. For example, here's a complete `.deps.qscripts` file with a `reload` directive (for Python 2.x):
 
@@ -71,22 +71,28 @@ See also:
 
 ## Using QScripts with trigger files
 
-Sometimes you don't want to trigger QScripts when your working scripts are saved, instead you want your own trigger condition.
+Sometimes you don't want to trigger QScripts when your scripts are saved, instead you want your own trigger condition.
 One way to achieve a custom trigger is by using the `/triggerfile` directive:
 
 ```
-/reload import imp;imp.reload($basename$);
 /triggerfile createme.tmp
 
-; Just some dependencies:
-dep.py
+; Dependencies...
+dep1.py
 ```
 
-This tells QScripts to wait until the trigger file `createme.tmp` is created before executing your script. Now, any time you want to invoke QScripts, just create the trigger file. The moment QScripts finds the trigger file, it deletes it and then always executes your active script (and reloads dependencies when applicable).
+This tells QScripts to wait until the trigger file `createme.tmp` is created (or modified) before executing your script. Now, any time you want to execute the active script, just create (or modify) the trigger file.
+
+
+You may pass the `/keep` option so QScripts does not delete your trigger file, for example:
+
+```
+/triggerfile /keep dont_del_me.info
+```
 
 ## Using QScripts programmatically
 
-It is possible to invoke `QScripts` from a script. For instance, in IDAPython, you can execute the last selected script with:
+It is possible to invoke QScripts from a script. For instance, in IDAPython, you can execute the last selected script with:
 
 ```python
 load_and_run_plugin("qscripts", 1);
@@ -95,6 +101,38 @@ load_and_run_plugin("qscripts", 1);
 (note the run argument `1`)
 
 If the script monitor is deactivated, you can programmatically activate it by running the plugin with argument `2`. To deactivate again, use run argument `3`.
+
+## Using QScripts with compiled code
+
+QScripts is not designed to work with compiled code, however using a combination of tricks, we can use QScripts for such cases:
+
+![Compiled code](docs/_resources/trigger_native.gif)
+
+What you just saw was the `hello` sample from the IDA SDK. This plugin has the `PLUGIN_UNL` flag. This flag tells IDA to unload the plugin after each invocation.
+We can then use the trigger files option and specify the compiled binary path as the trigger file. Additionally, we need to write a simple script that loads and runs that newly compiled plugin in IDA.
+
+First, let's start with the script that we need to activate and run:
+
+```python
+# Optionally clear the screen:
+idaapi.msg_clear()
+
+# Load your plugin and pass any arg value you want
+idaapi.load_and_run_plugin('hello', 0)
+
+# Optionally, do post work, etc.
+# ...
+```
+
+Then let's create the dependency file with the proper trigger file configuration:
+
+```
+/triggerfile /keep C:\<ida_bin_dir>\plugins\hello.dll
+```
+
+Now, simply use your favorite IDE (or terminal) and build (or rebuild) the `hello` sample plugin.
+
+The moment the compilation succeeds, the new binary will be detected (since it is the trigger file) then your active script will use IDA's `load_and_run_plugin()` to run the plugin again.
 
 # Building
 

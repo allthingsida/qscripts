@@ -41,18 +41,23 @@ enum class filemod_status_e
 // Structure to describe a file and its metadata
 struct fileinfo_t
 {
-    std::string file_path;
+    qstring file_path;
     qtime64_t modified_time;
 
-    fileinfo_t(const char* script_file = nullptr)
+    fileinfo_t(const char* file_path = nullptr): modified_time(0)
     {
-        if (script_file != nullptr)
-            this->file_path = script_file;
+        if (file_path != nullptr)
+            this->file_path = file_path;
     }
 
-    const bool empty() const
+    inline const bool empty() const
     {
         return file_path.empty();
+    }
+
+    inline const char* c_str()
+    {
+        return file_path.c_str();
     }
 
     bool operator==(const fileinfo_t &rhs) const
@@ -66,18 +71,26 @@ struct fileinfo_t
         modified_time = 0;
     }
 
+    bool refresh(const char *file_path = nullptr)
+    {
+        if (file_path != nullptr)
+            this->file_path = file_path;
+
+        return get_file_modification_time(this->file_path, &modified_time);
+    }
+
     // Checks if the current script has been modified
     // Optionally updates the time stamp to the latest one if modified
-    // Returns:
-    // -1: file no longer exists
-    //  0: no modification
-    //  1: modified
     filemod_status_e get_modification_status(bool update_mtime=true)
     {
         qtime64_t cur_mtime;
         const char *script_file = this->file_path.c_str();
         if (!get_file_modification_time(script_file, &cur_mtime))
+        {
+            if (update_mtime)
+                modified_time = 0;
             return filemod_status_e::not_found;
+        }
 
         // Script is up to date, no need to execute it again
         if (cur_mtime == modified_time)
@@ -117,8 +130,11 @@ using scripts_info_t = qvector<script_info_t>;
 // Active script information along with its dependencies
 struct active_script_info_t: script_info_t
 {
-    // Trigger file name
-    qstring trigger_file;
+    // Trigger file
+    fileinfo_t trigger_file;
+
+    // Trigger file options
+    bool b_keep_trigger_file;
 
     // The dependencies index files. First entry is for the main script's deps
     qvector<fileinfo_t> dep_indices;
@@ -127,9 +143,9 @@ struct active_script_info_t: script_info_t
     std::unordered_map<std::string, script_info_t> dep_scripts;
 
     // Checks to see if we have a dependency on a given file
-    const script_info_t *has_dep(const std::string &dep_file) const
+    const script_info_t *has_dep(const qstring &dep_file) const
     {
-        auto p = dep_scripts.find(dep_file);
+        auto p = dep_scripts.find(dep_file.c_str());
         return p == dep_scripts.end() ? nullptr : &p->second;
     }
 
@@ -180,6 +196,7 @@ struct active_script_info_t: script_info_t
         dep_indices.qclear();
         dep_scripts.clear();
         trigger_file.clear();
+        b_keep_trigger_file = false;
         reload_cmd.clear();
         pkg_base.clear();
     }
@@ -264,7 +281,7 @@ private:
         {
             if (strncmp(str, key, key_len) != 0)
                 return nullptr;
-            // Clear value
+            // Empty value?
             if (str[key_len] == '\0')
                 return "";
             else
@@ -296,12 +313,18 @@ private:
                     ctx.reload_cmd = val;
                 continue;
             }
-            else if (auto val = get_value(line.c_str(), "/triggerfile", 12))
+            else if (auto trigger_file = get_value(line.c_str(), "/triggerfile", 12))
             {
+                if (auto keep = get_value(trigger_file, "/keep", 5))
+                {
+                    trigger_file = keep;
+                    selected_script.b_keep_trigger_file = true;
+                }
+
                 if (ctx.main_file)
                 {
-                    selected_script.trigger_file = val;
-                    expand_file_name(selected_script.trigger_file, ctx);
+                    selected_script.trigger_file.refresh(trigger_file);
+                    expand_file_name(selected_script.trigger_file.file_path, ctx);
                 }
                 continue;
             }
@@ -611,13 +634,15 @@ private:
             // In trigger file mode, just wait for the trigger file to be created
             if (selected_script.trigger_based())
             {
-                // The monitor waits until the trigger file is created
-                auto trigger_file = selected_script.trigger_file.c_str();
-                if (!get_file_modification_time(trigger_file))
+                // The monitor waits until the trigger file is created or modified
+                auto trigger_status = selected_script.trigger_file.get_modification_status(true);
+                if (trigger_status != filemod_status_e::modified)
                     break;
 
-                // Delete trigger file
-                qunlink(trigger_file);
+                // Delete the trigger file
+                if (!selected_script.b_keep_trigger_file)
+                    qunlink(selected_script.trigger_file.c_str());
+
                 // Always execute the main script even if it was not changed
                 selected_script.invalidate();
                 // ...and proceed with qscript logic
@@ -1087,7 +1112,7 @@ public:
         }
     }
 
-    virtual bool idaapi run(size_t arg) override
+    bool idaapi run(size_t arg) override
     {
         switch (arg)
         {
