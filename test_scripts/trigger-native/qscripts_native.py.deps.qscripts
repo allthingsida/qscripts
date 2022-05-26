@@ -1,1 +1,1 @@
-/triggerfile /keep C:\Users\elias\Projects\ida\idasdk77\bin\plugins\qscripts_native.dll
+/triggerfile /keep $env:IDASDK$\bin\plugins\qscripts_native.dll

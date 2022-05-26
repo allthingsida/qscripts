@@ -127,7 +127,7 @@ idaapi.load_and_run_plugin('hello', 0)
 Then let's create the dependency file with the proper trigger file configuration:
 
 ```
-/triggerfile /keep C:\<ida_bin_dir>\plugins\hello.dll
+/triggerfile /keep C:\<ida_dir>\plugins\hello.dll
 ```
 
 Now, simply use your favorite IDE (or terminal) and build (or rebuild) the `hello` sample plugin.
