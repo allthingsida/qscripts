@@ -178,18 +178,6 @@ struct active_script_info_t: script_info_t
         return true;
     }
 
-    active_script_info_t &operator=(const script_info_t &rhs)
-    {
-        if (this != &rhs)
-        {
-            file_path     = rhs.file_path;
-            modified_time = rhs.modified_time;
-        }
-        dep_scripts.clear();
-        dep_indices.qclear();
-        return *this;
-    }
-
     void clear() override
     {
         script_info_t::clear();
@@ -363,8 +351,9 @@ private:
 
     void set_selected_script(script_info_t &script)
     {
-        // Activate script
-        selected_script = script;
+        // Activate a new script
+        selected_script.clear();
+        selected_script.refresh(script.file_path.c_str());
 
         // Recursively parse the dependencies and the index files
         expand_ctx_t main_ctx = { script.file_path.c_str(), true };
@@ -703,7 +692,8 @@ private:
                 break;
 
             // Check the main script
-            if ((mod_stat = selected_script.get_modification_status()) == filemod_status_e::not_found)
+            mod_stat = selected_script.get_modification_status();
+            if (mod_stat == filemod_status_e::not_found)
             {
                 // Script no longer exists
                 msg("QScripts detected that the active script '%s' no longer exists!\n", get_selected_script_file());
