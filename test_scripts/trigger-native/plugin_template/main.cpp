@@ -1,6 +1,6 @@
 #include "idasdk.h"
 
-bool main()
+bool main(size_t)
 {
     auto nfuncs = get_func_qty();
 

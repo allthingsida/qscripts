@@ -8,7 +8,7 @@
 using namespace triton;
 using namespace triton::arch;
 
-bool main()
+bool main(size_t)
 {
     constexpr const ea_t FUNC_EA = 0x400000;
     msg_clear();

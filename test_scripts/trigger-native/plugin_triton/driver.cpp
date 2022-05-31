@@ -1,13 +1,13 @@
 #include "idasdk.h"
 
-extern bool main();
+extern bool main(size_t);
 
 //--------------------------------------------------------------------------
 struct plugin_ctx_t : public plugmod_t
 {
-    bool idaapi run(size_t) override
+    bool idaapi run(size_t arg) override
     {
-        return main();
+        return main(arg);
     }
 };
 
