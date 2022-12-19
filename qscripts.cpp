@@ -11,7 +11,7 @@ scripts in your favorite editor and execute them directly in IDA.
 #include <regex>
 #include <filesystem>
 #pragma warning(push)
-#pragma warning(disable: 4267 4244)
+#pragma warning(disable: 4267 4244 4146)
 #include <loader.hpp>
 #include <idp.hpp>
 #include <expr.hpp>
