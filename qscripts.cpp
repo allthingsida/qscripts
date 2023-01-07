@@ -1178,7 +1178,7 @@ static const char help[] =
 plugin_t PLUGIN =
 {
     IDP_INTERFACE_VERSION,
-    PLUGIN_MULTI,
+    PLUGIN_MULTI | PLUGIN_FIX,
     init,
     nullptr,
     nullptr,
