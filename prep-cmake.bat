@@ -20,14 +20,14 @@ if not exist %IDASDK%\include\idax\xkernwin.hpp (
 if not exist build (
     mkdir build
     pushd build
-    cmake -A x64 -G "Visual Studio 16 2019" ..
+    cmake -A x64 ..
     popd
 )
 
 if not exist build64 (
     mkdir build64
     pushd build64
-    cmake -A x64 -DEA64=YES -G "Visual Studio 16 2019" ..
+    cmake -A x64 -DEA64=YES ..
     popd
 )
 
