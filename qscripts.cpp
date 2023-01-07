@@ -710,7 +710,7 @@ private:
 
 protected:
     static constexpr uint32 flags_ =
-        CH_KEEP    | CH_RESTORE  | CH_ATTRS   |
+        CH_KEEP    | CH_RESTORE  | CH_ATTRS   | CH_NOIDB |
         CH_CAN_DEL | CH_CAN_EDIT | CH_CAN_INS | CH_CAN_REFRESH;
 
     static constexpr int widths_[2]               = { 20, 70 };
@@ -1178,7 +1178,7 @@ static const char help[] =
 plugin_t PLUGIN =
 {
     IDP_INTERFACE_VERSION,
-    PLUGIN_MULTI,
+    PLUGIN_MULTI | PLUGIN_FIX,
     init,
     nullptr,
     nullptr,
