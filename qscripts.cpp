@@ -209,7 +209,7 @@ struct qscripts_chooser_t: public plugmod_t, public chooser_t
 private:
     action_manager_t am;
 
-    bool m_b_filemon_timer_active;
+    bool m_b_filemon_timer_active = false;
     qtimer_t m_filemon_timer = nullptr;
     const std::regex RE_EXPANDER = std::regex(R"(\$(.+?)\$)");
 
@@ -372,7 +372,8 @@ private:
         return !selected_script.file_path.empty();
     }
 
-    bool is_monitor_active() const { return m_b_filemon_timer_active; }
+    bool is_monitor_active()          const { return m_b_filemon_timer_active; }
+    bool is_filemon_timer_installed() const { return m_filemon_timer != nullptr; }
 
     // Dynamic string expansion
 	// ------------------------
@@ -634,7 +635,7 @@ private:
 
                 // Always execute the main script even if it was not changed
                 selected_script.invalidate();
-                // ...and proceed with qscript logic
+                // ...and proceed with QScript logic
             }
 
             // Check if the active script or its dependencies are changed:
@@ -1001,6 +1002,7 @@ public:
     {
         popup_names[POPUP_EDIT] = "~O~ptions";
         setup_ui();
+        saveload_options(false);
     }
 
     bool activate_monitor(bool activate = true)
@@ -1078,28 +1080,23 @@ public:
         }
     }
 
-    bool start_monitor()
+    bool install_filemon_timer()
     {
-        // Load the options
-        saveload_options(false);
-
-        // Register the monitor
-        m_b_filemon_timer_active = false;
         m_filemon_timer = register_timer(
             opt_change_interval,
             s_filemon_timer_cb,
             this);
-        return m_filemon_timer != nullptr;
+        return is_filemon_timer_installed();
     }
-
-    void stop_monitor()
+    
+    void uninstall_filemon_timer()
     {
-        if (m_filemon_timer != nullptr)
+        if (is_filemon_timer_installed())
         {
             unregister_timer(m_filemon_timer);
             m_filemon_timer = nullptr;
-            m_b_filemon_timer_active = false;
         }
+        activate_monitor(false);
     }
 
     bool idaapi run(size_t arg) override
@@ -1109,6 +1106,14 @@ public:
             // Full UI run
             case 0:
             {
+                if (!is_filemon_timer_installed())
+                {
+                    if (!install_filemon_timer())
+                        msg("QScripts: failed to start the file monitor.\n");
+                    else
+                        msg("QScripts: file monitor started successfully.\n");
+                }
+
                 show();
                 break;
             }
@@ -1139,7 +1144,7 @@ public:
 
     virtual ~qscripts_chooser_t()
     {
-        stop_monitor();
+        uninstall_filemon_timer();
     }
 };
 
@@ -1147,12 +1152,9 @@ public:
 plugmod_t *idaapi init(void)
 {
     auto plg = new qscripts_chooser_t();
-    if (!plg->start_monitor())
-    {
-        msg("QScripts: Failed to install monitor!\n");
-        delete plg;
-        plg = nullptr;
-    }
+    if (!plg->install_filemon_timer())
+        msg("QScripts: failed to install the file monitor on startup. Please invoke the UI once to attempt try again!\n");
+
     return plg;
 }
 
