@@ -381,6 +381,7 @@ private:
     // env:Variable_Name              Expands the 'Variable_Name'
     // pkgbase                        Sets the current pkgbase path
     // pkgmodname                     Expands the file name using the pckbase into the form: 'module.submodule1.submodule2'
+    // ext                            Addon suffix including bitness and extension (example: 64.dll, .so, 64.so, .dylib, etc.)
     void expand_string(qstring &input, qstring &output, const expand_ctx_t& ctx)
     {
         output = std::regex_replace(
@@ -408,6 +409,11 @@ private:
                         return s.c_str();
                     }
                     return "";
+                }
+                else if (strncmp(match1.c_str(), "ext", 3) == 0)
+                {
+                    static_assert(LOADER_DLL[0] == '*');
+                    return LOADER_DLL + 1;
                 }
                 else if (strncmp(match1.c_str(), "pkgbase", 7) == 0)
                 {

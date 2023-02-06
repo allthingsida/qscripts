@@ -1,1 +1,1 @@
-/triggerfile /keep $env:IDASDK$\bin\plugins\qscripts_native_triton64.dll
+/triggerfile /keep $env:IDASDK$\bin\plugins\qscripts_native_triton$ext$
