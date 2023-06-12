@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 list(APPEND DISABLED_SOURCES utils_impl.cpp) # included file
 set(PLUGIN_NAME              qscripts)
-set(PLUGIN_SOURCES           qscripts.cpp ${DISABLED_SOURCES})
+set(PLUGIN_SOURCES           qscripts.cpp ida.h script.hpp ${DISABLED_SOURCES})
 
 set_source_files_properties(${DISABLED_SOURCES} PROPERTIES LANGUAGE "")
 

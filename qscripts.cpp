@@ -10,194 +10,15 @@ scripts in your favorite editor and execute them directly in IDA.
 #include <string>
 #include <regex>
 #include <filesystem>
-#pragma warning(push)
-#pragma warning(disable: 4267 4244 4146)
-#include <loader.hpp>
-#include <idp.hpp>
-#include <expr.hpp>
-#include <prodir.h>
-#include <kernwin.hpp>
-#include <diskio.hpp>
-#include <registry.hpp>
-#pragma warning(pop)
+#include "ida.h"
+
 #include "utils_impl.cpp"
-#include <idax/xkernwin.hpp>
+#include "script.hpp"
 
 //-------------------------------------------------------------------------
 // Some constants
 static constexpr int  IDA_MAX_RECENT_SCRIPTS    = 512;
 static constexpr char IDAREG_RECENT_SCRIPTS[]   = "RecentScripts";
-static constexpr char UNLOAD_SCRIPT_FUNC_NAME[] = "__quick_unload_script";
-
-//-------------------------------------------------------------------------
-// File modification state
-enum class filemod_status_e
-{
-    not_found,
-    not_modified,
-    modified
-};
-
-// Structure to describe a file and its metadata
-struct fileinfo_t
-{
-    qstring file_path;
-    qtime64_t modified_time;
-
-    fileinfo_t(const char* file_path = nullptr): modified_time(0)
-    {
-        if (file_path != nullptr)
-            this->file_path = file_path;
-    }
-
-    inline const bool empty() const
-    {
-        return file_path.empty();
-    }
-
-    inline const char* c_str()
-    {
-        return file_path.c_str();
-    }
-
-    bool operator==(const fileinfo_t &rhs) const
-    {
-        return file_path == rhs.file_path;
-    }
-
-    virtual void clear()
-    {
-        file_path.clear();
-        modified_time = 0;
-    }
-
-    bool refresh(const char *file_path = nullptr)
-    {
-        if (file_path != nullptr)
-            this->file_path = file_path;
-
-        return get_file_modification_time(this->file_path, &modified_time);
-    }
-
-    // Checks if the current script has been modified
-    // Optionally updates the time stamp to the latest one if modified
-    filemod_status_e get_modification_status(bool update_mtime=true)
-    {
-        qtime64_t cur_mtime;
-        const char *script_file = this->file_path.c_str();
-        if (!get_file_modification_time(script_file, &cur_mtime))
-        {
-            if (update_mtime)
-                modified_time = 0;
-            return filemod_status_e::not_found;
-        }
-
-        // Script is up to date, no need to execute it again
-        if (cur_mtime == modified_time)
-            return filemod_status_e::not_modified;
-
-        if (update_mtime)
-            modified_time = cur_mtime;
-
-        return filemod_status_e::modified;
-    }
-
-    void invalidate()
-    {
-        modified_time = 0;
-    }
-};
-
-//-------------------------------------------------------------------------
-// Dependency script info
-struct script_info_t: fileinfo_t
-{
-    using fileinfo_t::fileinfo_t;
-
-    // Each dependency script can have its own reload command
-    qstring reload_cmd;
-
-    // Base path if this dependency is part of a package
-    qstring pkg_base;
-
-    const bool has_reload_directive() const { return !reload_cmd.empty(); }
-};
-
-// Script files
-using scripts_info_t = qvector<script_info_t>;
-
-//-------------------------------------------------------------------------
-// Active script information along with its dependencies
-struct active_script_info_t: script_info_t
-{
-    // Trigger file
-    fileinfo_t trigger_file;
-
-    // Trigger file options
-    bool b_keep_trigger_file;
-
-    // The dependencies index files. First entry is for the main script's deps
-    qvector<fileinfo_t> dep_indices;
-
-    // The list of dependency scripts
-    std::unordered_map<std::string, script_info_t> dep_scripts;
-
-    // Checks to see if we have a dependency on a given file
-    const script_info_t *has_dep(const qstring &dep_file) const
-    {
-        auto p = dep_scripts.find(dep_file.c_str());
-        return p == dep_scripts.end() ? nullptr : &p->second;
-    }
-
-    // Is this trigger based or dependency based?
-    const bool trigger_based() { return !trigger_file.empty(); }
-
-    // If no dependency index files have been modified, return 0.
-    // Return 1 if one of them has been modified or -1 if one of them has gone missing.
-    // In both latter cases, we have to recompute our dependencies
-    filemod_status_e is_any_dep_index_modified(bool update_mtime = true)
-    {
-        filemod_status_e r = filemod_status_e::not_modified;
-        for (auto &dep_file: dep_indices)
-        {
-            r = dep_file.get_modification_status(update_mtime);
-            if (r != filemod_status_e::not_modified)
-                break;
-        }
-        return r;
-    }
-
-    bool add_dep_index(const char *dep_file)
-    {
-        fileinfo_t fi;
-        if (!get_file_modification_time(dep_file, &fi.modified_time))
-            return false;
-
-        fi.file_path = dep_file;
-        dep_indices.push_back(std::move(fi));
-        return true;
-    }
-
-    void clear() override
-    {
-        script_info_t::clear();
-        dep_indices.qclear();
-        dep_scripts.clear();
-        trigger_file.clear();
-        b_keep_trigger_file = false;
-        reload_cmd.clear();
-        pkg_base.clear();
-    }
-
-    void invalidate_all_scripts()
-    {
-        invalidate();
-
-        // Invalidate all but the index file itself
-        for (auto &kv: dep_scripts)
-            kv.second.invalidate();
-    }
-};
 
 //-------------------------------------------------------------------------
 // Non-modal scripts chooser
@@ -223,11 +44,11 @@ private:
 
     struct expand_ctx_t
     {
-	    // input
+        // input
         qstring script_file;
-		bool    main_file;
-		
-		// working
+        bool    main_file;
+
+        // working
         qstring base_dir;
         qstring pkg_base;
         qstring reload_cmd;
@@ -243,24 +64,53 @@ private:
         return selected_script.file_path.c_str();
     }
 
+    bool make_meta_filename(
+        const char* filename,
+        const char* extension,
+        qstring& out,
+        bool local_only = false)
+    {
+        // Check the .qscripts folder
+        char dir[2048];
+        if (qdirname(dir, sizeof(dir), filename))
+        {
+            out.sprnt("%s" SDIRCHAR QSCRIPTS_LOCAL SDIRCHAR "%s.%s", dir, qbasename(filename), extension);
+            if (qfileexist(out.c_str()))
+                return true;
+        }
+
+        if (local_only)
+            return false;
+
+        // Check the actual script folder
+        out.sprnt("%s.%s", filename, extension);
+        return qfileexist(out.c_str());
+    }
+
+    bool get_deps_file(
+        const char* filename,
+        qstring& out)
+    {
+        return      make_meta_filename(filename, "deps", out, true)
+                ||  make_meta_filename(filename, "deps.qscripts", out);
+
+    }
+    
     bool parse_deps_for_script(expand_ctx_t &ctx)
     {
         // Parse the dependency index file
         qstring dep_file;
-        dep_file.sprnt("%s.deps.qscripts", ctx.script_file.c_str());
+        if (!get_deps_file(ctx.script_file.c_str(), dep_file))
+            return false;
+
         FILE *fp = qfopen(dep_file.c_str(), "r");
         if (fp == nullptr)
-        {
-            dep_file.sprnt("%s.proj.qscripts", ctx.script_file.c_str());
-            fp = qfopen(dep_file.c_str(), "r");
-            if (fp == nullptr)
-                return false;
-        }
+            return false;
 
         // Get the dependency file directory
-        ctx.base_dir.resize(dep_file.size());
-        qdirname(ctx.base_dir.begin(), ctx.base_dir.size(), dep_file.c_str());
-		ctx.base_dir.resize(strlen(ctx.base_dir.c_str()));
+        ctx.base_dir.resize(ctx.script_file.size());
+        qdirname(ctx.base_dir.begin(), ctx.base_dir.size(), ctx.script_file.c_str());
+        ctx.base_dir.resize(strlen(ctx.base_dir.c_str()));
 
         // Add the dependency file to the active script
         selected_script.add_dep_index(dep_file.c_str());
@@ -335,7 +185,7 @@ private:
 
             expand_ctx_t sub_ctx = ctx;
             sub_ctx.script_file  = line;
-			sub_ctx.main_file    = false;
+            sub_ctx.main_file    = false;
             parse_deps_for_script(sub_ctx);
         }
         qfclose(fp);
@@ -376,7 +226,7 @@ private:
     bool is_filemon_timer_installed() const { return m_filemon_timer != nullptr; }
 
     // Dynamic string expansion
-	// ------------------------
+    // ------------------------
     // basename                       Returns the basename of the input file
     // env:Variable_Name              Expands the 'Variable_Name'
     // pkgbase                        Sets the current pkgbase path
@@ -438,9 +288,9 @@ private:
     }
 
     bool execute_reload_directive(
-	    script_info_t &dep_script_file, 
-		qstring &err, 
-		bool silent=true)
+        script_info_t &dep_script_file,
+        qstring &err,
+        bool silent=true)
     {
         const char *script_file = dep_script_file.file_path.c_str();
 
@@ -774,7 +624,7 @@ protected:
             "<#Display the name of the file that is automatically executed#Show ~f~ile name when execution:C>\n"
             "<#Execute a function called '__quick_unload_script' before reloading the script#Execute the u~n~load script function:C>\n"
             "<#The executed scripts' side effects can be reverted with IDA's Undo#Allow QScripts execution to be ~u~ndo-able:C>>\n"
-                                                                                  
+
             "\n"
             "\n";
 
@@ -1094,7 +944,7 @@ public:
             this);
         return is_filemon_timer_installed();
     }
-    
+
     void uninstall_filemon_timer()
     {
         if (is_filemon_timer_installed())
@@ -1159,7 +1009,10 @@ plugmod_t *idaapi init(void)
 {
     auto plg = new qscripts_chooser_t();
     if (!plg->install_filemon_timer())
-        msg("QScripts: failed to install the file monitor on startup. Please invoke the UI once to attempt try again!\n");
+    {
+        if (::debug & IDA_DEBUG_PLUGIN)
+            msg("QScripts: failed to install the file monitor on startup. Please invoke the UI once to attempt try again!\n");
+    }
 
     return plg;
 }
