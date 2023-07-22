@@ -151,3 +151,9 @@ QScripts is written in C++ with IDA's SDK and therefore it should be deployed li
 * `%APPDATA%\Hex-Rays/plugins`
 
 Since the plugin uses IDA's SDK and no other OS specific functions, the plugin should be compilable for macOS and Linux just fine. I only provide MS Windows binaries. Please check the [releases page](https://github.com/0xeb/ida-qscripts/releases).
+
+# BONUS
+
+## Snippet Manager
+
+QScripts ships with a simple [Snippet Manager](snippet_manager/README.md) plugin to allow you to manage script snippets.
