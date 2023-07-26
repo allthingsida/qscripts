@@ -4,6 +4,12 @@ Snippet loader/saver for IDA Pro
 by Elias Bachaalany / @allthingsida
 """
 
+# TODO:
+# - snippetmanager: run snippets in order (optional prefix RE; comes with stock REs); save_combined()
+# - - save combined()
+# - save_clean() --> delete previous snippets and save
+# - stock regular expressions: \d+
+
 import os
 from typing import Union
 import idaapi, idc
@@ -71,7 +77,7 @@ class snippet_t:
         body = None if fast else node.getblob(0, 'X')
         return snippet_t(node.supstr(1),
                          node.supstr(0),
-                         body.decode('utf-8') if body else "",
+                         body.decode('utf-8').rstrip('\x00') if body else "",
                          netnode_idx=netnode_idx,
                          index=slot_idx)
 
@@ -128,18 +134,23 @@ class snippet_manager_t:
 
         return True
 
-    def save_to_folder(self, folder=''):
+    def save_to_folder(self, folder='') -> tuple[bool, str]:
         if not folder:
             folder = os.path.join(os.path.dirname(idc.get_idb_path()), '.snippets')
 
         if not os.path.exists(folder):
             os.makedirs(folder)
 
-        snippets = self.retrieve_snippets()
-        for snip in snippets:
-            outfile_name = os.path.join(folder, "%s.%s" % (snip.name, LANG_EXT_MAP[snip.lang]))
-            with open(outfile_name, 'w') as outfile:
-                outfile.write(snip.body)
+        try:
+            snippets = self.retrieve_snippets()
+            for snip in snippets:
+                outfile_name = os.path.join(folder, "%s.%s" % (snip.name, LANG_EXT_MAP[snip.lang]))
+                with open(outfile_name, 'w') as outfile:
+                    outfile.write(snip.body)
+        except Exception as e:
+            return (False, f'Failed to save: {e!s}')
+        return (True, f'Saved {len(snippets)} snippets to {folder}')
+
 
     def retrieve_snippets(self, fast: bool = False) -> list[snippet_t]:
         """Load all snippets from the database"""
@@ -207,6 +218,7 @@ ext.snippets = idaapi.object_t(
     save=save_snippets,
     load=load_snippets,
     delete=delete_snippets,
+    man=_sm,
 )
 
 # --------------------------------------------------------------
