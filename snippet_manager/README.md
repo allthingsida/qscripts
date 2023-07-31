@@ -6,10 +6,10 @@ This plugin for IDA provides a set of functionality for importing, exporting or 
 
 Type the following functions from IDA's CLI or just call them directly from Python:
 
-- `idaapi.ext.save_snippets(output_folder='')`: Save snippets to a specified output folder.
-- `idaapi.ext.load_snippets(input_folder='')`: Load snippets from a specified input folder.
-- `idaapi.ext.delete_snippets()`: Delete all existing snippets.
-- `idaapi.ext.man`: Direct access to the snippet manager object.
+- `idaapi.ext.snippets.save(output_folder='')`: Save snippets to a specified output folder.
+- `idaapi.ext.snippets.load(input_folder='')`: Load snippets from a specified input folder.
+- `idaapi.ext.snippets.delete()`: Delete all existing snippets.
+- `idaapi.ext.snippets.man`: Direct access to the snippet manager object.
 
 By default, if no input or output folders are specified, then the plugin will default to the `os.path.join(os.path.dirname(idc.get_idb_path()), '.snippets')` folder.
 
@@ -22,8 +22,6 @@ Alternatively, for example on Windows, just make a symbolic link directly:
 ```batch
 C:\Projects\ida-qscripts\snippet_manager>mklink c:\ida\plugins\snippetmanager.py %cd%\snippetmanager.py
 ```
-
-_(Just for fun, I provided the [ChatGPT-4/Code Interpreter prompt](.temp/gpt4-prompt-readme.txt) used to bootstrap this readme file)_
 
 ## Very important
 

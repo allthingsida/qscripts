@@ -240,6 +240,7 @@ class snippetman_plugmod_t(idaapi.plugmod_t):
     - save snippets: idaapi.ext.snippets.save()
     - load snippets: idaapi.ext.snippets.load()
     - delete snippets: idaapi.ext.snippets.delete()
+    - access the snippet manager object: idaapi.ext.snippets.man
 """)
         return 0
 
