@@ -23,10 +23,15 @@ R_LANG_EXT_MAP = {v: k for k, v in LANG_EXT_MAP.items()}
 
 # --------------------------------------------------------------
 class snippet_t:
-    def __init__(self, lang, name, body, /, netnode_idx=idaapi.BADNODE, index=-1):
-        self.lang = lang
-        self.name = name
-        self.body = body
+    def __init__(self, 
+                 lang: str, 
+                 name: str, 
+                 body: str, /, 
+                 netnode_idx: int = idaapi.BADNODE, 
+                 index: int =-1):
+        self.lang : str = lang
+        self.name : str = name
+        self.body : str = body
         self.netnode_idx : int = netnode_idx
         """Underlying netnode index"""
         self.index : int = index
@@ -51,7 +56,7 @@ class snippet_t:
         self.netnode_idx = node.index()
 
     @staticmethod
-    def from_file(file_name) -> Union[None, 'snippet_t']:
+    def from_file(file_name: str) -> Union[None, 'snippet_t']:
         """Constructs a snippet from a file.
         Its slot index and netnode index are not known yet.
         Call save() to save it to the database and get the netnode index
@@ -61,18 +66,17 @@ class snippet_t:
 
         basename = os.path.basename(file_name)
         ext = os.path.splitext(basename)[1].lstrip('.').lower()
-        if ext not in R_LANG_EXT_MAP:
+        if not (lang := R_LANG_EXT_MAP.get(ext)):
             return None
 
-        lang = R_LANG_EXT_MAP[ext]
-        with open(file_name, 'r') as infile:
-            body = infile.read()
+        with open(file_name, 'r') as f:
+            body = f.read()
 
         name = os.path.splitext(basename)[0]
         return snippet_t(lang, name, body)
 
     @staticmethod
-    def from_netnode(netnode_idx, slot_idx, fast: bool = False):
+    def from_netnode(netnode_idx: int, slot_idx: int, fast: bool = False):
         node = idaapi.netnode(netnode_idx)
         body = None if fast else node.getblob(0, 'X')
         return snippet_t(node.supstr(1),
@@ -103,7 +107,7 @@ class snippet_manager_t:
 
         self.index.altdel_all()
 
-    def load_from_folder(self, folder = '') -> bool:
+    def load_from_folder(self, folder : str = '') -> bool:
         """Imports snippets from a folder."""
         # If no input directory is specified, use the default one
         if not folder:
@@ -123,7 +127,8 @@ class snippet_manager_t:
         snippets = []
         for file in os.listdir(folder):
             file = os.path.join(folder, file)
-            snippets.append(snippet_t.from_file(file))
+            if snippet := snippet_t.from_file(file):
+                snippets.append(snippet)
 
         # Sort by snippet name
         snippets.sort(key=lambda x: x.name)
@@ -134,7 +139,7 @@ class snippet_manager_t:
 
         return True
 
-    def save_to_folder(self, folder='') -> tuple[bool, str]:
+    def save_to_folder(self, folder: str = '') -> tuple[bool, str]:
         if not folder:
             folder = os.path.join(os.path.dirname(idc.get_idb_path()), '.snippets')
 
@@ -177,7 +182,7 @@ if not ext:
 
 _sm = snippet_manager_t()
 
-def save_snippets(output_folder=''):
+def save_snippets(output_folder: str =''):
     """
     Save snippets to a specified output folder. If no folder is specified, 
     the function uses the current directory by default.
@@ -191,7 +196,7 @@ def save_snippets(output_folder=''):
     """
     return _sm.save_to_folder(output_folder)
 
-def load_snippets(input_folder=''):
+def load_snippets(input_folder: str =''):
     """
     Load snippets from a specified input folder. If no folder is specified, 
     the function uses the current directory by default.
@@ -254,7 +259,7 @@ class snippetman_plugin_t(idaapi.plugin_t):
     def init(self):
         return snippetman_plugmod_t()
 
-def PLUGIN_ENTRY():
+def PLUGIN_ENTRY() -> idaapi.plugin_t:
     return snippetman_plugin_t()
 
 # --------------------------------------------------------------
