@@ -67,7 +67,7 @@ See also:
 * `$basename$`: This variable is expanded to the base name of the current dependency line
 * `$env:EnvVariableName$`: `EnvVariableName` is expanded to its environment variable value if it exists or left unexpanded otherwise
 * `$pkgbase$`: Specify a package base directory. Can be used as part of a dependency file path.
-* `$pkgmodname$`: This is mainly used inside the `reload` directive. It replaces the path seperators with dots (which works nicely as a fully qualified module name). Please see the [package dependency](test_scripts/pkg-dependency/README.md) example file.
+* `$pkgparentmodname$` and `$pkgmodname$`: These are mainly used inside the `reload` directive. They help with proper [package dependency](test_scripts/pkg-dependency/README.md) reloading.
 * `$ext$`: This resolves to the plugin suffix and extension ("64.dll", ".so", "64.dylib", etc.). See the trigger native deps files for reference.
 
 ## Using QScripts with trigger files
