@@ -2,7 +2,7 @@ This is a dependency test folder.
 
 The script `t1.py` has its dependency index file which describes the reload directive and one dependency on `t2.py`:
 ```
-/reload import importlib;importlib.reload($basename$)
+/reload import importlib;import $basename$;importlib.reload($basename$)
 t2.py
 ```
 

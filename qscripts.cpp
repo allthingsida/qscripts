@@ -41,6 +41,7 @@ private:
     int opt_with_undo        = 0;
 
     active_script_info_t selected_script;
+    script_info_t* action_active_script = nullptr;
 
     struct expand_ctx_t
     {
@@ -329,16 +330,16 @@ private:
 
             if (!elang->eval_snippet(reload_cmd.c_str(), &err))
             {
-				err.sprnt("failed to execute the reload directive for '%s' with command: %s!\n", 
-                    script_file,
-                    reload_cmd.c_str());
+                err.sprnt(
+                    "QScripts failed to reload script file: '%s'\n"
+                    "Reload command used: %s", script_file, reload_cmd.c_str());
                 break;
             }
             return true;
         } while (false);
 
         if (!silent)
-            msg("QScripts failed to reload script file: '%s'\nReload command used: %s", script_file, err.c_str());
+			msg("%s", err.c_str());
 
         return false;
     }
@@ -346,9 +347,13 @@ private:
     bool execute_script(script_info_t *script_info, bool with_undo)
     {
         if (with_undo)
-            return process_ui_action(ACTION_EXECUTE_SCRIPT_WITH_UNDO_ID);
-        else
-            return execute_script_sync(script_info);
+        {
+            action_active_script = script_info;
+            auto r = process_ui_action(ACTION_EXECUTE_SCRIPT_WITH_UNDO_ID);
+            action_active_script = nullptr;
+            return r;
+        }
+        return execute_script_sync(script_info);
     }
 
     // Executes a script file
@@ -824,14 +829,14 @@ protected:
             "Deactivate script monitor",
             "Ctrl+D",
             FO_ACTION_UPDATE([this],
-                if (!this->is_correct_widget(ctx))
-                    return AST_DISABLE_FOR_WIDGET;
-                else
-                    return this->is_monitor_active() ? AST_ENABLE : AST_DISABLE;
+                return this->is_correct_widget(ctx) ? AST_ENABLE_FOR_WIDGET : AST_DISABLE_FOR_WIDGET;
             ),
             FO_ACTION_ACTIVATE([this]) {
-                this->clear_selected_script();
-                refresh_chooser(QSCRIPTS_TITLE);
+                if (this->is_monitor_active())
+                {
+                    this->clear_selected_script();
+                    refresh_chooser(QSCRIPTS_TITLE);
+                }
                 return 1;
             },
             nullptr,
@@ -843,10 +848,7 @@ protected:
             "Execute selected script",
             "Shift+Enter",
             FO_ACTION_UPDATE([this],
-                if (!this->is_correct_widget(ctx))
-                    return AST_DISABLE_FOR_WIDGET;
-                else
-                    return ctx->chooser_selection.empty() ? AST_DISABLE : AST_ENABLE;
+                return this->is_correct_widget(ctx) ? AST_ENABLE_FOR_WIDGET : AST_DISABLE_FOR_WIDGET;
             ),
             FO_ACTION_ACTIVATE([this]) {
                 if (!ctx->chooser_selection.empty())
@@ -862,10 +864,12 @@ protected:
             "QScripts monitor: execute last active script",
             "Alt-Shift-X",
             FO_ACTION_UPDATE([this],
-                return this->has_selected_script() ? AST_ENABLE : AST_DISABLE;
+                return AST_ENABLE_ALWAYS;
             ),
             FO_ACTION_ACTIVATE([this]) {
-                if (this->has_selected_script())
+                if (action_active_script != nullptr)
+                    this->execute_script_sync(action_active_script);
+                else if (this->has_selected_script())
                     this->execute_script_sync(&selected_script);
                 return 1;
             },

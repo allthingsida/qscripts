@@ -6,7 +6,7 @@ For this purpose, we can either explicitly specify the package's full path or re
 # Define package base folder
 /pkgbase $env:idapyx$
 # Automatically reload the package's modules when they change
-/reload import importlib; from $pkgparentmodname$ import $basename$ as __qscripts_autoreload__; importlib.reload(__qscripts_autoreload__)
+/reload import importlib;from $pkgparentmodname$ import $basename$ as __qscripts_autoreload__; importlib.reload(__qscripts_autoreload__)
 # Specify the paths to the package modules that need to be reloaded if they change
 $pkgbase$/idapyx/bin/pe/rtfuncs.py
 $pkgbase$/idapyx/bin/pe/types.py
