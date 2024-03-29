@@ -332,7 +332,9 @@ private:
             {
                 err.sprnt(
                     "QScripts failed to reload script file: '%s'\n"
-                    "Reload command used: %s", script_file, reload_cmd.c_str());
+                    "Reload command used: %s\n"
+                    "Error: %s\n",                  
+                    script_file, reload_cmd.c_str(), err.c_str());
                 break;
             }
             return true;
