@@ -41,6 +41,7 @@ private:
     int opt_with_undo        = 0;
 
     active_script_info_t selected_script;
+    script_info_t* action_active_script = nullptr;
 
     struct expand_ctx_t
     {
@@ -141,6 +142,7 @@ private:
                 if (ctx.main_file)
                 {
                     ctx.pkg_base = val;
+                    expand_file_name(ctx.pkg_base, ctx);
                     make_abs_path(ctx.pkg_base, ctx.base_dir.c_str(), true);
                 }
                 continue;
@@ -170,6 +172,7 @@ private:
             // From here on, the *line* variable is an expandable string leading to a script file
             ctx.script_file = line;
             expand_file_name(line, ctx);
+            normalize_path_sep(line);
 
             // Skip dependency scripts that (do not|no longer) exist
             script_info_t dep_script;
@@ -225,14 +228,38 @@ private:
     bool is_monitor_active()          const { return m_b_filemon_timer_active; }
     bool is_filemon_timer_installed() const { return m_filemon_timer != nullptr; }
 
-    // Dynamic string expansion
-    // ------------------------
-    // basename                       Returns the basename of the input file
-    // env:Variable_Name              Expands the 'Variable_Name'
-    // pkgbase                        Sets the current pkgbase path
-    // pkgmodname                     Expands the file name using the pckbase into the form: 'module.submodule1.submodule2'
-    // ext                            Addon suffix including bitness and extension (example: 64.dll, .so, 64.so, .dylib, etc.)
-    void expand_string(qstring &input, qstring &output, const expand_ctx_t& ctx)
+    std::string expand_pkgmodname(const expand_ctx_t& ctx)
+    {
+        auto dep_file = selected_script.has_dep(ctx.script_file.c_str());
+        qstring pkg_base = dep_file == nullptr ? selected_script.pkg_base : dep_file->pkg_base;
+
+        // If the script file is in the package base, then replace the path separators with '.'
+        if (strncmp(ctx.script_file.c_str(), pkg_base.c_str(), pkg_base.length()) == 0)
+        {
+            qstring s = ctx.script_file.c_str() + pkg_base.length() + 1;
+            s.replace(SDIRCHAR, ".");
+            // Drop the extension too
+            auto idx = s.rfind('.');
+            if (idx != -1)
+                s.resize(idx);
+
+            return s.c_str();
+        }
+        return "";
+    }
+    
+    // Dynamic string expansion   Description
+    // ------------------------   -----------
+    // basename                   Returns the basename of the input file
+    // env:Variable_Name          Expands the 'Variable_Name'
+    // pkgbase                    Sets the current pkgbase path
+    // pkgmodname                 Expands the file name using the pkgbase into the form: 'module.submodule1.submodule2'
+    // pkgparentmodname           Expands the file name using the pkgbase into the form up to the parent module: 'module.submodule1'
+    // ext                        Add-on suffix including bitness and extension (example: 64.dll, .so, 64.so, .dylib, etc.)
+    void expand_string(
+        qstring &input, 
+        qstring &output, 
+        const expand_ctx_t& ctx)
     {
         output = std::regex_replace(
             input.c_str(),
@@ -243,22 +270,13 @@ private:
 
                 if (strncmp(match1.c_str(), "pkgmodname", 10) == 0)
                 {
-                    auto dep_file = selected_script.has_dep(ctx.script_file.c_str());
-                    qstring pkg_base = dep_file == nullptr ? selected_script.pkg_base : dep_file->pkg_base;
-
-                    // If the script file is in the package base, then replace the path separators with '.'
-                    if (strncmp(ctx.script_file.c_str(), pkg_base.c_str(), pkg_base.length()) == 0)
-                    {
-                        qstring s = ctx.script_file.c_str() + pkg_base.length() + 1;
-                        s.replace(SDIRCHAR, ".");
-                        // Drop the extension too
-                        auto idx = s.rfind('.');
-                        if (idx != -1)
-                            s.resize(idx);
-
-                        return s.c_str();
-                    }
-                    return "";
+					return expand_pkgmodname(ctx);
+                }
+                else if (strncmp(match1.c_str(), "pkgparentmodname", 16) == 0)
+                {
+                    std::string pkgmodname = expand_pkgmodname(ctx);
+                    size_t pos = pkgmodname.rfind('.');
+                    return pos == std::string::npos ? pkgmodname : pkgmodname.substr(0, pos);
                 }
                 else if (strncmp(match1.c_str(), "ext", 3) == 0)
                 {
@@ -307,15 +325,23 @@ private:
             qstring reload_cmd;
             expand_ctx_t ctx;
             ctx.script_file = script_file;
+            ctx.pkg_base = dep_script_file.pkg_base;
             expand_string(dep_script_file.reload_cmd, reload_cmd, ctx);
 
             if (!elang->eval_snippet(reload_cmd.c_str(), &err))
+            {
+                err.sprnt(
+                    "QScripts failed to reload script file: '%s'\n"
+                    "Reload command used: %s\n"
+                    "Error: %s\n",                  
+                    script_file, reload_cmd.c_str(), err.c_str());
                 break;
+            }
             return true;
         } while (false);
 
         if (!silent)
-            msg("QScripts failed to reload script file: '%s':\n%s", script_file, err.c_str());
+			msg("%s", err.c_str());
 
         return false;
     }
@@ -323,9 +349,13 @@ private:
     bool execute_script(script_info_t *script_info, bool with_undo)
     {
         if (with_undo)
-            return process_ui_action(ACTION_EXECUTE_SCRIPT_WITH_UNDO_ID);
-        else
-            return execute_script_sync(script_info);
+        {
+            action_active_script = script_info;
+            auto r = process_ui_action(ACTION_EXECUTE_SCRIPT_WITH_UNDO_ID);
+            action_active_script = nullptr;
+            return r;
+        }
+        return execute_script_sync(script_info);
     }
 
     // Executes a script file
@@ -339,7 +369,7 @@ private:
         {
             auto script_file = script_info->file_path.c_str();
 
-            // First things first: always take the file's modification timestamp first so not to visit it again in the file monitor timer
+            // First things first: always take the file's modification time-stamp first so not to visit it again in the file monitor timer
             if (!get_file_modification_time(script_file, &script_info->modified_time))
             {
                 msg("Script file '%s' not found!\n", script_file);
@@ -392,7 +422,8 @@ private:
         return exec_ok;
     }
 
-    enum {
+    enum 
+    {
         OPTID_INTERVAL       = 0x0001,
         OPTID_CLEARLOG       = 0x0002,
         OPTID_SHOWNAME       = 0x0004,
@@ -537,9 +568,8 @@ private:
                     qstring err;
                     dep_script_changed = true;
                     if (     dep_script.has_reload_directive()
-                         && !execute_reload_directive(dep_script, err))
+                         && !execute_reload_directive(dep_script, err, false))
                     {
-                        msg("QScripts: warning: failed to execute reload directive: %s\n", err.c_str());
                         brk = true;
                         break;
                     }
@@ -801,14 +831,14 @@ protected:
             "Deactivate script monitor",
             "Ctrl+D",
             FO_ACTION_UPDATE([this],
-                if (!this->is_correct_widget(ctx))
-                    return AST_DISABLE_FOR_WIDGET;
-                else
-                    return this->is_monitor_active() ? AST_ENABLE : AST_DISABLE;
+                return this->is_correct_widget(ctx) ? AST_ENABLE_FOR_WIDGET : AST_DISABLE_FOR_WIDGET;
             ),
             FO_ACTION_ACTIVATE([this]) {
-                this->clear_selected_script();
-                refresh_chooser(QSCRIPTS_TITLE);
+                if (this->is_monitor_active())
+                {
+                    this->clear_selected_script();
+                    refresh_chooser(QSCRIPTS_TITLE);
+                }
                 return 1;
             },
             nullptr,
@@ -820,10 +850,7 @@ protected:
             "Execute selected script",
             "Shift+Enter",
             FO_ACTION_UPDATE([this],
-                if (!this->is_correct_widget(ctx))
-                    return AST_DISABLE_FOR_WIDGET;
-                else
-                    return ctx->chooser_selection.empty() ? AST_DISABLE : AST_ENABLE;
+                return this->is_correct_widget(ctx) ? AST_ENABLE_FOR_WIDGET : AST_DISABLE_FOR_WIDGET;
             ),
             FO_ACTION_ACTIVATE([this]) {
                 if (!ctx->chooser_selection.empty())
@@ -839,10 +866,12 @@ protected:
             "QScripts monitor: execute last active script",
             "Alt-Shift-X",
             FO_ACTION_UPDATE([this],
-                return this->has_selected_script() ? AST_ENABLE : AST_DISABLE;
+                return AST_ENABLE_ALWAYS;
             ),
             FO_ACTION_ACTIVATE([this]) {
-                if (this->has_selected_script())
+                if (action_active_script != nullptr)
+                    this->execute_script_sync(action_active_script);
+                else if (this->has_selected_script())
                     this->execute_script_sync(&selected_script);
                 return 1;
             },

@@ -1,10 +1,6 @@
-# Non package dependencies first
-/reload import importlib;importlib.reload($basename$)
-dep.py
+# Package dependencies (here, we use the environment variable 'IDAPYX' that contains the package path
+/pkgbase $env:idapyx$
+/reload import importlib;from $pkgparentmodname$ import $basename$ as __qscripts_autoreload__;importlib.reload(__qscripts_autoreload__)
+$pkgbase$/idapyx/bin/pe/rtfuncs.py
+$pkgbase$/idapyx/bin/pe/types.py
 
-# Package dependencies
-/pkgbase C:\Python38\Lib\site-packages
-/reload import importlib;import $pkgmodname$;importlib.reload($pkgmodname$)
-
-$pkgbase$\PIL\BlpImagePlugin.py
-$pkgbase$\PIL\ContainerIO.py
