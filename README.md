@@ -4,6 +4,12 @@ QScripts is productivity tool and an alternative to IDA's "Recent scripts" (Alt-
 
 ![Quick introduction](docs/_resources/qscripts-vid-1.gif)
 
+Video tutorials on the [AllThingsIDA](https://www.youtube.com/@allthingsida) YouTube channel:
+
+- [Boost your IDA programming efficiency tenfold using the ida-qscripts productivity plugin](https://youtu.be/1UEoLAgEGMc?si=YMieIKHEY0AXgMHU)
+- [Scripting concepts and productivity tips for IDAPython & IDC](https://youtu.be/RgHmwHN0NLk?si=OCnLMhcAmHAQPgNI)
+- [An exercise in netnodes with the snippet manager plugin](https://youtu.be/yhVdLYzFJW0?si=z3xMqCEFOU89gAkI)
+
 # Usage
 
 Invoke QScripts from the plugins menu, press Ctrl-3 or its default hotkey Alt-Shift-F9.
