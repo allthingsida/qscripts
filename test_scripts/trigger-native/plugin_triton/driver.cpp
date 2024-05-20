@@ -14,13 +14,13 @@ struct plugin_ctx_t : public plugmod_t
 //--------------------------------------------------------------------------
 plugin_t PLUGIN =
 {
-  IDP_INTERFACE_VERSION,
-  PLUGIN_UNL | PLUGIN_MULTI,
-  []()->plugmod_t* {return new plugin_ctx_t; },
-  nullptr,
-  nullptr,
-  nullptr,
-  nullptr,
-  "QScripts native Triton plugin driver",
-  nullptr,
+    IDP_INTERFACE_VERSION,
+    PLUGIN_UNL | PLUGIN_MULTI,
+    []()->plugmod_t* {return new plugin_ctx_t; },
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    "QScripts native Triton plugin driver",
+    "Ctrl-Shift-R",
 };

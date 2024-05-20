@@ -1,7 +1,7 @@
 #include "idasdk.h"
 
 #include <sstream>
-#include <triton/api.hpp>
+#include <triton/context.hpp>
 #include <triton/basicBlock.hpp>
 #include <triton/x86Specifications.hpp>
 
@@ -21,8 +21,8 @@ bool main(size_t)
     }
 
     /* Init the triton context */
-    triton::API api;
-    api.setArchitecture(ARCH_X86_64);
+    triton::Context ctx;
+    ctx.setArchitecture(ARCH_X86_64);
 
     func_item_iterator_t ffi;
     BasicBlock bb;
@@ -46,7 +46,7 @@ bool main(size_t)
         bb.add(inst);
     }
 
-    api.disassembly(bb, FUNC_EA);
+    ctx.disassembly(bb, FUNC_EA);
 
     std::ostringstream ostr;
     ostr << bb;
@@ -56,7 +56,7 @@ bool main(size_t)
         "%s\n", ostr.str().c_str());
 
     ostr.str("");
-    auto simplified_bb = api.simplify(bb);
+    auto simplified_bb = ctx.simplify(bb);
     ostr << simplified_bb;
     msg("----------------\n"
         "Simplified:\n"
