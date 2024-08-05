@@ -40,7 +40,7 @@ QScripts offers a feature that allows automatic re-execution of the active scrip
 
 ### Setting Up Automatic Dependencies
 
-To leverage this automatic dependency tracking feature, create a file named identically to your active script, appending `.deps.qscripts` to its name. This file should contain paths to dependent scripts, along with any necessary reload directives.
+To leverage the automatic dependency tracking feature, create a file named identically to your active script, appending `.deps.qscripts` to its name. This file should contain paths to dependent scripts, along with any necessary reload directives.
 
 Optionally, you can place the `.deps.qscripts` file within a `.qscripts` subfolder, located alongside your active script.
 
@@ -50,7 +50,7 @@ For projects involving Python, QScripts can automatically [reload](https://docs.
 
 #### Example `.deps.qscripts` file for `t1.py`:
 
-```plaintext
+```txt
 /reload import importlib; import $basename$; importlib.reload($basename$);
 t2.py
 # This is a comment
@@ -77,6 +77,14 @@ See also:
 * `$pkgbase$`: Specify a package base directory. Can be used as part of a dependency file path.
 * `$pkgparentmodname$` and `$pkgmodname$`: These are mainly used inside the `reload` directive. They help with proper [package dependency](test_scripts/pkg-dependency/README.md) reloading.
 * `$ext$`: This resolves to the plugin suffix and extension ("64.dll", ".so", "64.dylib", etc.). See the trigger native deps files for reference.
+
+## Using QScripts like a Jupyter notebook
+
+It is possible to use QScripts as if you were working in a regular Jupiter notebook. Your `.deps.qscripts` file should have the `/notebook` keyword. This allows you to monitor a folder, where each file in that folder is considered a cell in the notebook. When you save a file, the last saved cell will be re-executed.
+
+See also:
+
+* [Notebooks dependency example](test_scripts/notebooks/README.md)
 
 ## Using QScripts with trigger files
 

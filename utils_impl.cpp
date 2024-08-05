@@ -32,8 +32,9 @@ bool get_file_modification_time(
     return true;
 }
 
+template <class STRING>
 bool get_file_modification_time(
-    const qstring &filename,
+    const STRING &filename,
     qtime64_t *mtime = nullptr)
 {
     return get_file_modification_time(filename.c_str(), mtime);
@@ -140,3 +141,22 @@ namespace std
         return regex_replace(s.cbegin(), s.cend(), re, f);
     }
 }
+
+//-------------------------------------------------------------------------
+void enumerate_files(
+    const std::filesystem::path& path, 
+    const std::regex& filter, 
+    std::function<bool(const std::string&)> callback)
+{
+    for (const auto& entry : std::filesystem::directory_iterator(path)) 
+    {
+        if (entry.is_regular_file()) 
+        {
+            if (!std::regex_match(entry.path().filename().string(), filter)) 
+                continue;
+            if (!callback(entry.path().string()))
+                break;
+        }
+    }
+}
+

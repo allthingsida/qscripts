@@ -2,6 +2,7 @@
 
 #define QSCRIPTS_LOCAL ".qscripts"
 static constexpr char UNLOAD_SCRIPT_FUNC_NAME[] = "__quick_unload_script";
+static constexpr auto DEFAULT_CELLS_RE = R"(\d{4}.*\.py$)";
 
 //-------------------------------------------------------------------------
 // File modification state
@@ -101,13 +102,47 @@ struct script_info_t: fileinfo_t
 using scripts_info_t = qvector<script_info_t>;
 
 //-------------------------------------------------------------------------
-// Active script information along with its dependencies
-struct active_script_info_t: script_info_t
+// Notebook context
+struct notebook_ctx_t
 {
-    // Trigger file
-    fileinfo_t trigger_file;
+    enum activate_action_e
+    {
+        act_exec_none,
+        act_exec_main,
+        act_exec_all
+    };
+    std::string base_path;
+    std::string title;
+    std::regex cells_re = std::regex(DEFAULT_CELLS_RE);
+    std::map<std::string, qtime64_t> cell_files;
+    std::string last_active_cell;
+
+    int activation_action = act_exec_none;
+
+    void clear()
+    {
+        title.clear();
+        cell_files.clear();
+        last_active_cell.clear();
+        cells_re = std::regex(DEFAULT_CELLS_RE);
+    }
+};
+
+//-------------------------------------------------------------------------
+// Active script information along with its dependencies
+struct active_script_info_t : script_info_t
+{
+    // Notebook options
+    bool b_is_notebook = false;
+
+    const bool is_notebook() const {
+        return b_is_notebook;
+    }
+
+    notebook_ctx_t notebook;
 
     // Trigger file options
+    fileinfo_t trigger_file;
     bool b_keep_trigger_file;
 
     // The dependencies index files. First entry is for the main script's deps
@@ -117,14 +152,14 @@ struct active_script_info_t: script_info_t
     std::unordered_map<std::string, script_info_t> dep_scripts;
 
     // Checks to see if we have a dependency on a given file
-    const script_info_t *has_dep(const qstring &dep_file) const
+    const script_info_t* has_dep(const qstring& dep_file) const
     {
         auto p = dep_scripts.find(dep_file.c_str());
         return p == dep_scripts.end() ? nullptr : &p->second;
     }
 
     // Is this trigger based or dependency based?
-    const bool trigger_based() { return !trigger_file.empty(); }
+    const bool trigger_based() const { return !trigger_file.empty(); }
 
     // If no dependency index files have been modified, return 0.
     // Return 1 if one of them has been modified or -1 if one of them has gone missing.
@@ -132,7 +167,7 @@ struct active_script_info_t: script_info_t
     filemod_status_e is_any_dep_index_modified(bool update_mtime = true)
     {
         filemod_status_e r = filemod_status_e::not_modified;
-        for (auto &dep_file: dep_indices)
+        for (auto& dep_file : dep_indices)
         {
             r = dep_file.get_modification_status(update_mtime);
             if (r != filemod_status_e::not_modified)
@@ -141,7 +176,7 @@ struct active_script_info_t: script_info_t
         return r;
     }
 
-    bool add_dep_index(const char *dep_file)
+    bool add_dep_index(const char* dep_file)
     {
         fileinfo_t fi;
         if (!get_file_modification_time(dep_file, &fi.modified_time))
@@ -159,6 +194,8 @@ struct active_script_info_t: script_info_t
         dep_scripts.clear();
         trigger_file.clear();
         b_keep_trigger_file = false;
+        b_is_notebook = false;
+        notebook.clear();
         reload_cmd.clear();
         pkg_base.clear();
     }
@@ -168,7 +205,7 @@ struct active_script_info_t: script_info_t
         invalidate();
 
         // Invalidate all but the index file itself
-        for (auto &kv: dep_scripts)
+        for (auto& kv : dep_scripts)
             kv.second.invalidate();
     }
 };
