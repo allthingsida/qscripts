@@ -1,0 +1,4 @@
+/notebook Test notebook #B
+/notebook.cells_re B\d{4}.*\.py$
+# On notebook activation, just execute this main script
+/notebook.activate exec_main

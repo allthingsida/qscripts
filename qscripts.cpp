@@ -10,6 +10,7 @@ scripts in your favorite editor and execute them directly in IDA.
 #include <string>
 #include <regex>
 #include <filesystem>
+#include <unordered_set>
 #include "ida.h"
 
 #include "utils_impl.cpp"
@@ -22,7 +23,7 @@ static constexpr char IDAREG_RECENT_SCRIPTS[]   = "RecentScripts";
 
 //-------------------------------------------------------------------------
 // Non-modal scripts chooser
-struct qscripts_chooser_t: public plugmod_t, public chooser_t
+struct qscripts_chooser_t: public plugmod_t, public chooser_t, public event_listener_t
 {
     using chooser_t::operator delete;
     using chooser_t::operator new;
@@ -65,6 +66,14 @@ private:
         return selected_script.file_path.c_str();
     }
 
+    ssize_t idaapi on_event(ssize_t code, va_list va) override
+    {
+        if (code == ui_finish_populating_widget_popup)
+            am.on_ui_finish_populating_widget_popup(va);
+
+        return 0;
+    }
+
     bool make_meta_filename(
         const char* filename,
         const char* extension,
@@ -88,7 +97,7 @@ private:
         return qfileexist(out.c_str());
     }
 
-    bool get_deps_file(
+    bool find_deps_file(
         const char* filename,
         qstring& out)
     {
@@ -101,7 +110,7 @@ private:
     {
         // Parse the dependency index file
         qstring dep_file;
-        if (!get_deps_file(ctx.script_file.c_str(), dep_file))
+        if (!find_deps_file(ctx.script_file.c_str(), dep_file))
             return false;
 
         FILE *fp = qfopen(dep_file.c_str(), "r");
@@ -146,6 +155,39 @@ private:
                     make_abs_path(ctx.pkg_base, ctx.base_dir.c_str(), true);
                 }
                 continue;
+            }
+            else if (auto val = get_value(line.c_str(), "/notebook.cells_re", 18))
+            {
+                if (ctx.main_file)
+                {
+                    selected_script.notebook.cells_re = std::regex(val);
+                    continue;
+                }
+            }
+            else if (auto val = get_value(line.c_str(), "/notebook.activate", 18))
+            {
+                if (ctx.main_file)
+                {
+                    int act;
+                    if (qstrcmp(val, "exec_main") == 0)
+                        act = notebook_ctx_t::act_exec_main;
+                    else if (qstrcmp(val, "exec_all") == 0)
+                        act = notebook_ctx_t::act_exec_all;
+                    else
+                        act = notebook_ctx_t::act_exec_none;
+
+                    selected_script.notebook.activation_action = act;
+                    continue;
+                }
+            }
+            else if (auto val = get_value(line.c_str(), "/notebook", 9))
+            {
+                if (ctx.main_file)
+                {
+                    selected_script.b_is_notebook = true;
+                    selected_script.notebook.title = val;
+                    continue;
+                }
             }
             else if (auto val = get_value(line.c_str(), "/reload", 7))
             {
@@ -202,6 +244,25 @@ private:
         make_abs_path(filename, ctx.base_dir.c_str(), true);
     }
 
+    void populate_initial_notebook_cells()
+    {
+        auto& cell_files = selected_script.notebook.cell_files;
+        auto current_path = std::filesystem::path(selected_script.file_path.c_str()).parent_path();
+        selected_script.notebook.base_path = current_path.string();
+
+        enumerate_files(
+            current_path, 
+            selected_script.notebook.cells_re, 
+            [&cell_files](const std::string& filename)
+            {
+                qtime64_t mtime;
+                get_file_modification_time(filename, &mtime);
+                cell_files[filename] = mtime;
+                return true;
+            }
+        );
+    }
+    
     void set_selected_script(script_info_t &script)
     {
         // Activate a new script
@@ -211,10 +272,15 @@ private:
         // Recursively parse the dependencies and the index files
         expand_ctx_t main_ctx = { script.file_path.c_str(), true };
         parse_deps_for_script(main_ctx);
+
+        // If a notebook is selected, let's capture all the cell files
+        if (selected_script.is_notebook())
+            populate_initial_notebook_cells();
     }
 
     void clear_selected_script()
     {
+        action_active_script = nullptr;
         selected_script.clear();
         // ...and deactivate the monitor
         activate_monitor(false);
@@ -508,6 +574,71 @@ private:
             if (!is_monitor_active() || !has_selected_script())
                 break;
 
+            std::unique_ptr<active_script_info_t> notebook_cell_script;
+            active_script_info_t* work_script = &selected_script;
+
+            //
+            // Notebook mode
+            //
+            if (selected_script.is_notebook())
+            {
+                auto& last_active_cell = selected_script.notebook.last_active_cell;
+                auto& cell_files = selected_script.notebook.cell_files;
+                auto current_path = std::filesystem::path(selected_script.file_path.c_str()).parent_path();
+                std::unordered_set<std::string> present_files;
+
+                std::string active_cell;
+                enumerate_files(
+                    current_path, 
+                    selected_script.notebook.cells_re, 
+                    [&present_files, &last_active_cell, &active_cell, &cell_files](const std::string& filename)
+                    {
+                        present_files.insert(filename);
+                        auto p = cell_files.find(filename);
+
+                        qtime64_t mtime;
+                        get_file_modification_time(filename.c_str(), &mtime);
+
+                        // New file?
+                        if (p == cell_files.end())
+                        {
+                            cell_files[filename] = mtime;
+                        }
+                        // File was modified?
+                        else if (p->second != mtime)
+                        {
+                            last_active_cell = active_cell = filename;
+                            p->second = mtime;
+                            // Stop enumeration; next interval we pick up the rest
+                            return false;
+                        }
+                        return true;
+                    }
+                );
+
+                // Remove missing files from cell_files
+                for (auto it = cell_files.begin(); it != cell_files.end();)
+                {
+                    if (present_files.find(it->first) == present_files.end())
+                        it = cell_files.erase(it);
+                    else
+                        ++it;
+                }
+
+                // If not modified cell file, then do nothing
+                if (active_cell.empty())
+                    break;
+
+                // ...use the same metadata as the notebook main script, but just execute the given cell
+                notebook_cell_script.reset(new active_script_info_t(selected_script));
+                work_script = notebook_cell_script.get();
+                work_script->file_path = active_cell.c_str();
+            }
+
+            //
+            // Trigger mode
+            // 
+           
             // In trigger file mode, just wait for the trigger file to be created
             if (selected_script.trigger_based())
             {
@@ -529,10 +660,10 @@ private:
             // 1. Dependency file --> repopulate it and execute active script
             // 2. Any dependencies --> reload if needed and //
             // 3. Active script --> execute it again
-            auto &dep_scripts = selected_script.dep_scripts;
+            auto &dep_scripts = work_script->dep_scripts;
 
             // Let's check the dependencies index files first
-            auto mod_stat = selected_script.is_any_dep_index_modified();
+            auto mod_stat = work_script->is_any_dep_index_modified();
             if (mod_stat == filemod_status_e::modified)
             {
                 // Force re-parsing of the index file
@@ -540,7 +671,7 @@ private:
                 set_selected_script(selected_script);
 
                 // Let's invalidate all the scripts time stamps so we ensure they are re-interpreted again
-                selected_script.invalidate_all_scripts();
+                work_script->invalidate_all_scripts();
 
                 // Refresh the UI
                 refresh_chooser(QSCRIPTS_TITLE);
@@ -579,18 +710,20 @@ private:
                 break;
 
             // Check the main script
-            mod_stat = selected_script.get_modification_status();
+            mod_stat = work_script->get_modification_status();
             if (mod_stat == filemod_status_e::not_found)
             {
                 // Script no longer exists
-                msg("QScripts detected that the active script '%s' no longer exists!\n", get_selected_script_file());
+                msg(
+                    "QScripts detected that the active script '%s' no longer exists!\n", 
+                    work_script->file_path.c_str());
                 clear_selected_script();
                 break;
             }
 
             // Script or its dependencies changed?
             if (dep_script_changed || mod_stat == filemod_status_e::modified)
-                execute_script(&selected_script, opt_with_undo);
+                execute_script(work_script, opt_with_undo);
         } while (false);
         return opt_change_interval;
     }
@@ -606,6 +739,7 @@ protected:
     static constexpr const char *ACTION_DEACTIVATE_MONITOR_ID        = "qscripts:deactivatemonitor";
     static constexpr const char *ACTION_EXECUTE_SELECTED_SCRIPT_ID   = "qscripts:execselscript";
     static constexpr const char *ACTION_EXECUTE_SCRIPT_WITH_UNDO_ID  = "qscripts:execscriptwithundo";
+    static constexpr const char *ACTION_EXECUTE_NOTEBOOK_ID          = "qscripts:executenotebook";
 
     scripts_info_t m_scripts;
     ssize_t m_nselected = NO_SELECTION;
@@ -724,7 +858,7 @@ protected:
             if (is_monitor_active())
             {
                 attrs->flags = CHITEM_BOLD;
-                *icon = IDAICONS::FLASH_EDIT;
+                *icon = selected_script.is_notebook() ? IDAICONS::NOTEPAD_1 : IDAICONS::KEYBOARD_GRAY;
             }
             else
             {
@@ -747,11 +881,35 @@ protected:
     // Activate a script and execute it
     cbret_t idaapi enter(size_t n) override
     {
+        bool exec_ok = false;
+
         m_nselected = n;
 
         // Set as the selected script and execute it
         set_selected_script(m_scripts[n]);
-        if (execute_script(&selected_script, opt_with_undo))
+
+        if (   selected_script.is_notebook() 
+            && selected_script.notebook.activation_action == notebook_ctx_t::act_exec_none)
+        {
+            // Notebook, execute nothing on activation
+            msg("Selected notebook: %s\n",
+                selected_script.notebook.title.c_str());
+        }
+        else if (   selected_script.is_notebook()
+                 && selected_script.notebook.activation_action == notebook_ctx_t::act_exec_all)
+        {
+            // Notebook, execute all scripts on activation
+            msg("Executing all scripts for notebook: %s\n", 
+                selected_script.notebook.title.c_str());
+
+            execute_notebook_cells(&selected_script);
+        }
+        else
+        {
+            exec_ok = execute_script(&selected_script, opt_with_undo);
+        }
+
+        if (exec_ok)
             saveload_options(true, OPTID_ONLY_SCRIPT);
 
         // ...and activate the monitor even if the script fails
@@ -828,8 +986,8 @@ protected:
         am.add_action(
             AMAHF_NONE,
             ACTION_DEACTIVATE_MONITOR_ID,
-            "Deactivate script monitor",
-            "Ctrl+D",
+            "QScripts: Deactivate script monitor",
+            "Ctrl-D",
             FO_ACTION_UPDATE([this],
                 return this->is_correct_widget(ctx) ? AST_ENABLE_FOR_WIDGET : AST_DISABLE_FOR_WIDGET;
             ),
@@ -842,13 +1000,13 @@ protected:
                 return 1;
             },
             nullptr,
-            IDAICONS::BPT_DISABLED);
+            IDAICONS::DISABLED);
 
         am.add_action(
             AMAHF_NONE,
             ACTION_EXECUTE_SELECTED_SCRIPT_ID,
-            "Execute selected script",
-            "Shift+Enter",
+            "QScripts: Execute selected script",
+            "Shift-Enter",
             FO_ACTION_UPDATE([this],
                 return this->is_correct_widget(ctx) ? AST_ENABLE_FOR_WIDGET : AST_DISABLE_FOR_WIDGET;
             ),
@@ -861,22 +1019,59 @@ protected:
             IDAICONS::FLASH);
 
         am.add_action(
-            AMAHF_NONE,
+            AMAHF_IDA_POPUP,
             ACTION_EXECUTE_SCRIPT_WITH_UNDO_ID,
-            "QScripts monitor: execute last active script",
+            "QScripts: Execute last active script",
             "Alt-Shift-X",
             FO_ACTION_UPDATE([this],
                 return AST_ENABLE_ALWAYS;
             ),
-            FO_ACTION_ACTIVATE([this]) {
-                if (action_active_script != nullptr)
-                    this->execute_script_sync(action_active_script);
-                else if (this->has_selected_script())
-                    this->execute_script_sync(&selected_script);
+            FO_ACTION_ACTIVATE([this]) 
+            {
+                if (is_monitor_active())
+                {
+                    script_info_t* work_script = nullptr;
+                    std::unique_ptr<active_script_info_t> cell_script;
+                    if (selected_script.is_notebook())
+                    {
+                        if (!selected_script.notebook.last_active_cell.empty())
+                        {
+                            cell_script.reset(new active_script_info_t(selected_script));
+                            if (work_script = cell_script.get())
+                                work_script->file_path = selected_script.notebook.last_active_cell.c_str();
+                        }
+                    }
+                    else if (action_active_script != nullptr)
+                        work_script = action_active_script;
+                    else if (this->has_selected_script())
+                        work_script = &selected_script;
+
+                    if (work_script != nullptr)
+                        this->execute_script_sync(work_script);
+                }
                 return 1;
             },
             "An action to programmatically execute the active script",
             IDAICONS::FLASH);
+
+        am.add_action(
+            AMAHF_IDA_POPUP,
+            ACTION_EXECUTE_NOTEBOOK_ID,
+            "QScripts: Execute all notebook cells",
+            "",
+            FO_ACTION_UPDATE([this],
+                return AST_ENABLE_ALWAYS;
+            ),
+            FO_ACTION_ACTIVATE([this]) 
+            {
+                if (this->has_selected_script() && selected_script.is_notebook())
+                    this->execute_notebook_cells(&selected_script);
+                return 1;
+            },
+            "An action to programmatically execute the active script",
+            IDAICONS::NOTEPAD_1);
+
+        hook_event_listener(HT_UI, this);
     }
 
 public:
@@ -943,6 +1138,26 @@ public:
     {
         if (n >=0 && n < ssize_t(m_scripts.size()))
             execute_script(&m_scripts[n], opt_with_undo);
+    }
+
+    void execute_notebook_cells(active_script_info_t *script)
+    {
+        auto& cell_files = script->notebook.cell_files;
+
+        active_script_info_t cell_script = *script;
+        enumerate_files(
+            script->notebook.base_path,
+            script->notebook.cells_re,
+            [this, &cell_script, &cell_files](const std::string& filename)
+            {
+                qtime64_t mtime;
+                get_file_modification_time(filename, &mtime);
+                cell_files[filename] = mtime;
+                cell_script.file_path = filename.c_str();
+                // Execute script and stop enumeration if one cell fails to execute
+                return this->execute_script_sync(&cell_script);
+            }
+        );
     }
 
     void show()

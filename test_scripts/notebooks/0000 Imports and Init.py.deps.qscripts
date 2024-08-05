@@ -1,0 +1,5 @@
+# A simple notebook
+/notebook Test notebook
+# On activation, just execute the main script
+/notebook.activate exec_main
+# Uses default cells matcher (pattern: \d{4}.*\.py$)

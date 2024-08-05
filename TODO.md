@@ -11,6 +11,7 @@
 - Restore the QScripts window layout when closed and re-opened
 - Use OS specific file change monitors
 
+- It is time to re-write this, now that we have all the specs and features
 
 # Monitor code and refactoring
 

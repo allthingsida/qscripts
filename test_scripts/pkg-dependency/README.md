@@ -1,3 +1,5 @@
+# Package Dependency Example
+
 In this example, we're dealing with a dependency file for a package that's currently being developed. This setup is designed to ensure that modules from the package, `idapyx` in this instance, are automatically reloaded upon any changes.
 
 For this purpose, we can either explicitly specify the package's full path or refer to it through an environment variable, as demonstrated below:

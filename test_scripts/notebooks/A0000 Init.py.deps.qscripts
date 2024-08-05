@@ -1,0 +1,5 @@
+/notebook Test notebook #A
+# This notebook looks for "Annnn" prefixed cells
+/notebook.cells_re A\d{4}.*\.py$
+# On notebook execution, execute all cells
+/notebook.activate exec_all
