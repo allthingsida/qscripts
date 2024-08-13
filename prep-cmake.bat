@@ -17,27 +17,11 @@ if not exist %IDASDK%\include\idax\xkernwin.hpp (
     goto :eof
 )
 
-if not exist build (
-    mkdir build
-    pushd build
-    cmake -A x64 ..
-    popd
-)
+if not exist build cmake -A x64 -B build -S .
+if not exist build64 cmake -B build64 -S . -A x64 -DEA64=YES
 
-if not exist build64 (
-    mkdir build64
-    pushd build64
-    cmake -A x64 -DEA64=YES ..
-    popd
-)
+if "%1"=="build" cmake --build build --config Release && cmake --build build64 --config Release
 
-if "%1"=="build" (
-    pushd build
-    cmake --build . --config Release
-    popd
-    pushd build64
-    cmake --build . --config Release
-)
 echo.
 echo All done!
 echo.
