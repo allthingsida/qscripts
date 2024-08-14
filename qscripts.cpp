@@ -464,7 +464,12 @@ private:
             if (opt_show_filename)
                 msg("QScripts executing %s...\n", script_file);
 
-            exec_ok = elang->compile_file(script_file, &errbuf);
+            exec_ok = elang->compile_file(
+                script_file, 
+#if IDA_SDK_VERSION >= 900
+                nullptr,  // requested_namespace
+#endif
+                &errbuf);
             if (!exec_ok)
             {
                 msg("QScripts failed to compile script file: '%s':\n%s", script_file, errbuf.c_str());
