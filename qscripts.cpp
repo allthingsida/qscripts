@@ -23,7 +23,7 @@ static constexpr char IDAREG_RECENT_SCRIPTS[]   = "RecentScripts";
 
 //-------------------------------------------------------------------------
 // Non-modal scripts chooser
-struct qscripts_chooser_t: public plugmod_t, public chooser_t, public event_listener_t
+struct qscripts_chooser_t: public plugmod_t, public chooser_t
 {
     using chooser_t::operator delete;
     using chooser_t::operator new;
@@ -64,14 +64,6 @@ private:
     const char *get_selected_script_file()
     {
         return selected_script.file_path.c_str();
-    }
-
-    ssize_t idaapi on_event(ssize_t code, va_list va) override
-    {
-        if (code == ui_finish_populating_widget_popup)
-            am.on_ui_finish_populating_widget_popup(va);
-
-        return 0;
     }
 
     bool make_meta_filename(
@@ -1024,7 +1016,7 @@ protected:
             IDAICONS::FLASH);
 
         am.add_action(
-            AMAHF_IDA_POPUP,
+            AMAHF_NONE,
             ACTION_EXECUTE_SCRIPT_WITH_UNDO_ID,
             "QScripts: Execute last active script",
             "Alt-Shift-X",
@@ -1060,7 +1052,7 @@ protected:
             IDAICONS::FLASH);
 
         am.add_action(
-            AMAHF_IDA_POPUP,
+            AMAHF_NONE,
             ACTION_EXECUTE_NOTEBOOK_ID,
             "QScripts: Execute all notebook cells",
             "",
@@ -1075,8 +1067,6 @@ protected:
             },
             "An action to programmatically execute the active script",
             IDAICONS::NOTEPAD_1);
-
-        hook_event_listener(HT_UI, this);
     }
 
 public:
@@ -1182,6 +1172,14 @@ public:
                 widget,
                 nullptr,
                 ACTION_EXECUTE_SELECTED_SCRIPT_ID);
+            attach_action_to_popup(
+                widget,
+                nullptr,
+                ACTION_EXECUTE_SCRIPT_WITH_UNDO_ID);
+            attach_action_to_popup(
+                widget,
+                nullptr,
+                ACTION_EXECUTE_NOTEBOOK_ID);
         }
     }
 
