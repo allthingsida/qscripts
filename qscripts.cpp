@@ -575,6 +575,63 @@ private:
             active_script_info_t* work_script = &selected_script;
 
             //
+            // Handle dependencies first
+            // 
+
+            // Check if the active script or its dependencies are changed:
+            // 1. Dependency file --> repopulate it and execute active script
+            // 2. Any dependencies --> reload if needed and //
+            // 3. Active script --> execute it again
+            auto& dep_scripts = selected_script.dep_scripts;
+
+            // Let's check the dependencies index files first
+            auto mod_stat = selected_script.is_any_dep_index_modified();
+            if (mod_stat == filemod_status_e::modified)
+            {
+                // Force re-parsing of the index file
+                dep_scripts.clear();
+                set_selected_script(selected_script);
+
+                // Let's invalidate all the scripts time stamps so we ensure they are re-interpreted again
+                selected_script.invalidate_all_scripts();
+
+                // Refresh the UI
+                refresh_chooser(QSCRIPTS_TITLE);
+
+                // Just leave and come back fast so we get a chance to re-evaluate everything
+                return 1; // (1 ms)
+            }
+            // Dependency index file is gone
+            else if (mod_stat == filemod_status_e::not_found && !dep_scripts.empty())
+            {
+                // Let's just check the active script
+                dep_scripts.clear();
+            }
+
+            //
+            // Check the dependency scripts
+            //
+            bool dep_script_changed = false;
+            bool brk = false;
+            for (auto& kv : dep_scripts)
+            {
+                auto& dep_script = kv.second;
+                if (dep_script.get_modification_status() == filemod_status_e::modified)
+                {
+                    qstring err;
+                    dep_script_changed = true;
+                    if (dep_script.has_reload_directive()
+                        && !execute_reload_directive(dep_script, err, false))
+                    {
+                        brk = true;
+                        break;
+                    }
+                }
+            }
+            if (brk)
+                break;
+
+            //
             // Notebook mode
             //
             if (selected_script.is_notebook())
@@ -622,22 +679,25 @@ private:
                         ++it;
                 }
 
-                // If not modified cell file, then do nothing
-                if (active_cell.empty())
-                    break;
+                // We have to always execute a script when a dependency changes:
+                // - If a dependency has changed, but no active cells changedthen attempt to use the last active cell.
+                if (dep_script_changed && active_cell.empty())
+                    active_cell = selected_script.notebook.last_active_cell;
 
-                // ...use the same metadata as the notebook main script, but just execute the given cell
-                notebook_cell_script.reset(new active_script_info_t(selected_script));
-                work_script = notebook_cell_script.get();
-                work_script->file_path = active_cell.c_str();
+                // If no modified cell files, then do nothing
+                if (!active_cell.empty())
+                {
+                    // ...use the same metadata as the notebook main script, but just execute the given cell
+                    notebook_cell_script.reset(new active_script_info_t(selected_script));
+                    work_script = notebook_cell_script.get();
+                    work_script->file_path = active_cell.c_str();
+                }
             }
-
             //
             // Trigger mode
             // 
-           
             // In trigger file mode, just wait for the trigger file to be created
-            if (selected_script.trigger_based())
+            else if (selected_script.trigger_based())
             {
                 // The monitor waits until the trigger file is created or modified
                 auto trigger_status = selected_script.trigger_file.get_modification_status(true);
@@ -652,59 +712,6 @@ private:
                 selected_script.invalidate();
                 // ...and proceed with QScript logic
             }
-
-            // Check if the active script or its dependencies are changed:
-            // 1. Dependency file --> repopulate it and execute active script
-            // 2. Any dependencies --> reload if needed and //
-            // 3. Active script --> execute it again
-            auto &dep_scripts = work_script->dep_scripts;
-
-            // Let's check the dependencies index files first
-            auto mod_stat = work_script->is_any_dep_index_modified();
-            if (mod_stat == filemod_status_e::modified)
-            {
-                // Force re-parsing of the index file
-                dep_scripts.clear();
-                set_selected_script(selected_script);
-
-                // Let's invalidate all the scripts time stamps so we ensure they are re-interpreted again
-                work_script->invalidate_all_scripts();
-
-                // Refresh the UI
-                refresh_chooser(QSCRIPTS_TITLE);
-
-                // Just leave and come back fast so we get a chance to re-evaluate everything
-                return 1; // (1 ms)
-            }
-            // Dependency index file is gone
-            else if (mod_stat == filemod_status_e::not_found && !dep_scripts.empty())
-            {
-                // Let's just check the active script
-                dep_scripts.clear();
-            }
-
-            //
-            // Check the dependency scripts
-            //
-            bool dep_script_changed = false;
-            bool brk = false;
-            for (auto &kv: dep_scripts)
-            {
-                auto &dep_script = kv.second;
-                if (dep_script.get_modification_status() == filemod_status_e::modified)
-                {
-                    qstring err;
-                    dep_script_changed = true;
-                    if (     dep_script.has_reload_directive()
-                         && !execute_reload_directive(dep_script, err, false))
-                    {
-                        brk = true;
-                        break;
-                    }
-                }
-            }
-            if (brk)
-                break;
 
             // Check the main script
             mod_stat = work_script->get_modification_status();
