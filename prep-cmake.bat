@@ -17,6 +17,12 @@ if not exist %IDASDK%\include\idax\xkernwin.hpp (
     goto :eof
 )
 
+if "%1"=="clean" (
+    if exist build rmdir /s /q build
+    if exist build64 rmdir /s /q build64
+    goto :eof
+)
+
 if not exist build cmake -A x64 -B build -S .
 if not exist build64 cmake -B build64 -S . -A x64 -DEA64=YES
 
