@@ -1,21 +1,693 @@
-MIT License
+Human-Origin Source License v1.0
+=================================================
 
-Copyright (c) 2019 Elias Bachaalany
+This is a source-available license for any first-party work that expressly
+identifies this license.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This license is derived in structure from the Mozilla Public License 2.0, but
+it is not the Mozilla Public License, it is not MPL-only, and it is not a
+standard OSI-approved open-source license. The added terms below are part of
+the license grant. They are intended to preserve human attribution, prevent
+erasure of origin, and prohibit unauthorized private derivation, cloning,
+rebranding, porting, and AI-assisted implementation mining.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+The Mozilla Foundation does not maintain, endorse, or approve this license.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Quick Summary (Non-Normative)
+-----------------------------
+
+This summary is explanatory, illustrative, and non-exhaustive. It does not
+expand or narrow the operative license terms below. The license text below
+governs.
+
+You may generally, subject to the full license terms:
+
+    - read, inspect, build, run, evaluate, and benchmark the Covered Software;
+    - study the Covered Software for understanding, provided it is not used as
+      an implementation source for a Derivative Implementation;
+    - use the Covered Software unchanged as a dependency, including
+      commercially;
+    - distribute unmodified copies, including through package managers and
+      similar distribution channels;
+    - include unmodified Covered Software in larger proprietary, commercial,
+      internal, or personal software; and
+    - prepare and submit bug fixes, optimizations, features, documentation,
+      tests, and pull requests back to the upstream Project.
+
+You may not, without prior written permission from the Author:
+
+    - ship or maintain a modified version outside the contribution-purpose
+      rules;
+    - maintain a divergent private or internal fork;
+    - port, clone, rebrand, or recreate the Covered Software;
+    - create an API-compatible replacement, behavioral clone, competing
+      implementation, or Derivative Implementation; or
+    - use AI-assisted implementation mining to create, improve, test,
+      document, or validate a Derivative Implementation.
+
+0. Purpose
+----------
+
+This license allows the public to inspect, build, evaluate, distribute, and use
+unmodified copies of the Covered Software, including as a dependency in larger
+software systems, subject to the conditions below.
+
+It does not grant permission to silently maintain divergent modifications or
+forks, port, rebrand, clone, or mine the Covered Software as an implementation
+source, whether manually or with AI systems, without prior written permission
+from the Author.
+
+The purpose is simple: reuse is allowed only on terms that preserve the human
+origin and provenance of the work. Access is not permission to conceal,
+materially obscure, or misrepresent the origin of the Covered Software, or to
+turn the project into a ready-made source for a Derivative Implementation.
+
+"Human-Origin" does not mean that the Covered Software was created without
+tools, automation, or AI assistance. It means that the Covered Software is
+published under the stewardship, judgment, authorship responsibility,
+integration effort, and maintenance of its human author, and that this human
+origin must not be erased.
+
+0.1. Copyright and Contract
+
+This license grants contractual permissions in addition to permissions that may
+exist under applicable copyright law. Nothing in this license claims ownership
+over abstract ideas, facts, general programming techniques, or independently created implementations that are not copied
+from, materially derived from, or Substantially Informed By the Covered
+Software.
+
+1. Definitions
+--------------
+
+1.1. "Author"
+    means the person or legal entity identified in the Covered Software's
+    project documentation, source notices, repository metadata, package
+    metadata, copyright notices, or other official Project materials as the
+    copyright holder, licensor, author, maintainer, or project steward for the
+    Project. If multiple Authors are identified, "Author" means each such person
+    or legal entity with respect to the rights that person or entity owns or
+    controls.
+
+1.2. "Project"
+    means the first-party software project, repository, package, component, or
+    other work that expressly identifies this license and includes the Covered
+    Software.
+
+1.3. "Permission Contact"
+    means the email address, issue tracker, form, repository link, or other
+    written contact path identified in the Project's documentation, repository
+    metadata, package metadata, or other official Project materials for
+    permission requests under this license. If no specific permission-request
+    contact is identified, the Permission Contact is the ordinary written
+    contact path for the Author or Project.
+
+1.4. "Upstream Project URL"
+    means the URL, repository location, package page, documentation page, or
+    other durable identifier identified by the Project's official materials as
+    the upstream location for the Covered Software.
+
+1.5. "Contributor"
+    means the Author and any individual or legal entity that intentionally
+    submits a Contribution to the Covered Software.
+
+1.6. "Contribution"
+    means any original work of authorship, code, documentation, example,
+    patch, build file, design note, or other material intentionally submitted
+    for inclusion in the Covered Software.
+
+1.7. "Covered Software"
+    means Source Code Form to which the Author or a Contributor has attached a
+    notice identifying this license, the Executable Form of that Source Code
+    Form, and any portion of either.
+
+1.8. "Source Code Form"
+    means the form of the work preferred for making modifications, including
+    source files, headers, scripts, examples, documentation, build files, and
+    associated project metadata that are first-party project material.
+
+1.9. "Executable Form"
+    means any form of the Covered Software other than Source Code Form,
+    including object code, static libraries, dynamic libraries, binaries,
+    archives, and packaged distributions.
+
+1.10. "Unmodified Dependency Use"
+    means using, linking, compiling, packaging, or distributing an unmodified
+    copy of the Covered Software as a dependency of a Larger Work. Build flags,
+    compiler options, generated build artifacts, and external build-system
+    integration do not by themselves make the Covered Software modified.
+
+1.11. "Modification"
+    means any change, addition, deletion, adaptation, translation, port,
+    refactor, restructuring, transformation, patch, or other alteration of the
+    Covered Software in Source Code Form, whether or not distributed.
+
+1.12. "Contribution-Purpose Modification"
+    means a Modification made in good faith solely to fix a bug, improve
+    compatibility, optimize performance, add a feature, improve documentation,
+    prepare a patch, prepare a pull request, discuss a proposed change, or
+    otherwise contribute improvements back to the upstream project maintained by
+    the Author. A Contribution-Purpose Modification does not include a
+    divergent private fork, competing product, API-compatible replacement,
+    rebrand, port, clone, or Substantially Similar Implementation.
+
+1.13. "Substantially Similar Implementation"
+    means an implementation that reproduces a substantial portion of the
+    structure, organization, API relationships, algorithms, interoperability
+    design, implementation techniques, or expressive implementation decisions of
+    the Covered Software, rather than merely implementing similar abstract
+    functionality.
+
+1.14. "Derivative Implementation"
+    means any implementation, library, module, service, binding, port, fork,
+    rebrand, wrapper, API-compatible replacement, behavioral clone, or
+    Substantially Similar Implementation that is copied from, adapted from,
+    materially derived from, or Substantially Informed By the Covered Software,
+    including its implementation expression, structure, organization, API
+    relationships, examples, documentation, design, debugging decisions, or
+    other protected expression.
+
+1.15. "Substantially Informed By"
+    means, when used with respect to the Covered Software, that a person or AI
+    System had access to the Covered Software and materially relied on protected
+    implementation expression from the Covered Software when creating,
+    improving, testing, documenting, or validating another implementation. Mere
+    knowledge of the Covered Software, high-level inspiration, compatibility
+    goals, use of public behavior, use of independently known concepts, or access without material reliance on protected implementation
+    expression is not Substantially Informed By.
+
+1.16. "Independent Development"
+    means software created without copying from, materially deriving from, or
+    being Substantially Informed By the Covered Software.
+
+1.17. "Larger Work"
+    means a work that combines unmodified Covered Software with other material
+    in a separate file or files, where the other material is not Covered
+    Software and is not a Derivative Implementation.
+
+1.18. "AI System"
+    means a machine-learning system, large language model, code-generation
+    model, agentic coding system, retrieval-augmented generation system,
+    automated programming assistant, fine-tuned model, training pipeline,
+    evaluation pipeline, dataset-building pipeline, or materially similar
+    automated system.
+
+1.19. "AI-Assisted Implementation Mining"
+    means using the Covered Software, or any substantial portion of its source,
+    examples, documentation, architecture, APIs, design, debugging decisions,
+    or commit history, as input, context, retrieval material, training data,
+    fine-tuning data, evaluation data, prompt material, or agent instructions
+    for the purpose of creating, improving, testing, documenting, or validating
+    a Derivative Implementation.
+
+1.20. "Human-Origin Attribution"
+    means visible attribution to the Author and project origin, in substantially
+    this form:
+
+        This project includes code or implementation work derived from or
+        substantially informed by [PROJECT NAME] by [AUTHOR NAME]:
+        [UPSTREAM PROJECT URL]
+
+1.21. "Licensable"
+    means having the right to grant, to the maximum extent possible, whether at
+    the time of the initial grant or subsequently, the rights conveyed by this
+    license.
+
+1.22. "Patent Claims" of a Contributor
+    means any patent claim, including without limitation method, process, and
+    apparatus claims, in any patent Licensable by that Contributor that would be
+    infringed, but for the grant of this license, by the making, using, selling,
+    offering for sale, having made, importing, or transferring of that
+    Contributor's Contributions as permitted by this license.
+
+2. License Grants
+-----------------
+
+Subject to Your compliance with this license, each Contributor grants You a
+worldwide, royalty-free, non-exclusive license:
+
+2.1. Copyright Grant
+    to read, inspect, build, run, reproduce, make available, distribute, and
+    otherwise use unmodified copies of that Contributor's Contributions, either
+    alone or as part of Unmodified Dependency Use in a Larger Work, and to
+    create, test, publish, and distribute Contribution-Purpose Modifications as
+    permitted by Section 2.4.
+
+2.2. Patent Grant
+    under Patent Claims of that Contributor to make, use, sell, offer for sale,
+    have made, import, and otherwise transfer unmodified copies of that
+    Contributor's Contributions, either alone or as part of Unmodified
+    Dependency Use in a Larger Work, and to create, use, test, publish, and
+    distribute Contribution-Purpose Modifications solely as permitted by
+    Section 2.4, but only to the extent those Patent Claims would be infringed
+    by that Contributor's Contributions themselves as used in those
+    Contribution-Purpose Modifications. This patent grant does not cover claims
+    infringed only by Your changes, third-party changes, or combinations with
+    other software.
+
+2.3. No Implied Rights
+    The licenses granted in this Section are the only rights granted under this
+    license. No additional rights or licenses are implied. No trademark,
+    service mark, trade name, logo, endorsement, publicity, or moral-rights
+    waiver is granted except as necessary to provide required attribution and
+    notices.
+
+2.4. Contribution-Purpose Modifications
+    You may create, use, test, reproduce, publish, and distribute
+    Contribution-Purpose Modifications solely to prepare, discuss, submit, or
+    offer improvements back to the upstream project maintained by the Author.
+    This permission includes creating a temporary branch, fork, patch series, or
+    pull request for contribution-back purposes.
+
+    To rely on this permission, You must:
+
+    (a) preserve all notices required by this license;
+
+    (b) clearly mark modified files or otherwise make the proposed changes
+        reasonably visible to reviewers;
+
+    (c) submit or offer the Modification back to the Author in good faith by
+        pull request, patch, issue, email, or other written contribution path
+        within 90 days after completion of the proposed Modification;
+
+    (d) not use the Modification as a divergent private fork, competing product,
+        substitute library, API-compatible replacement, rebrand, port, clone, or
+        Substantially Similar Implementation;
+
+    (e) not distribute, publish, package, advertise, or make available the
+        Modification as an independent product, independent fork, replacement
+        package, hosted service, or competing implementation; and
+
+    (f) not use the Modification for ongoing production, commercial, internal,
+        or operational purposes except for temporary evaluation, testing,
+        debugging, review, or contribution preparation.
+
+    If the Author declines, rejects, or does not accept a Contribution-Purpose
+    Modification, You may retain the Contribution-Purpose Modification solely
+    for archival, record-keeping, or historical purposes. This public license
+    does not grant You continuing permission to use it operationally, maintain
+    it as a private/internal fork, or distribute it as a divergent
+    implementation. You may request separate written permission under
+    Section 2.6.
+
+2.5. No License for Other Modifications or Derivative Implementations
+    Except for Contribution-Purpose Modifications permitted by Section 2.4, this
+    license does not grant You permission to create, use, keep, distribute, or
+    make available any Modification or Derivative Implementation, including for
+    private, internal, experimental, or non-public use, without prior written
+    permission from the Author.
+
+2.6. Additional Permissions and Separate Licensing
+    If You want to use the Covered Software in a way that is not permitted by
+    this license, You may request additional permission from the Author through
+    the Permission Contact.
+
+    This includes, without limitation, commercial modification, redistribution
+    beyond the public grant, derivative licensing, private/internal modification
+    rights, long-term maintenance forks, ports, Derivative Implementations,
+    API-compatible replacements, rebrands, competing
+    implementations, AI-assisted implementation mining, or other uses outside
+    the public license grant.
+
+    Permission requests should be made through the Permission Contact.
+
+    The Author may grant additional permission subject to reasonable negotiated
+    conditions, including attribution, source disclosure, contribution-back
+    obligations, licensing fees, usage limits, or other terms.
+
+    Any additional permission, exception, commercial license, private license,
+    or separate agreement must be granted in writing by the Author or an
+    authorized representative of the Author. No additional permission is implied
+    by discussion, silence, availability of source code, repository access,
+    issue comments, pull requests, or prior dealings.
+
+    Contributors do not receive authority to grant additional permissions,
+    exceptions, private licenses, or derivative-use rights merely by submitting
+    Contributions unless the Author separately authorizes them in writing.
+
+3. Conditions for All Permitted Use
+-----------------------------------
+
+The grants in Section 2 are conditioned on all of the following:
+
+3.1. Preserve Notices
+    You must not remove, obscure, rename away, or alter the substance of any
+    copyright notice, license notice, SPDX identifier, author notice,
+    attribution notice, patent notice, warranty disclaimer, limitation of
+    liability, or source-origin notice contained in the Covered Software,
+    except to correct a known factual inaccuracy.
+
+3.2. Provide the License
+    Any distribution of the Covered Software in Source Code Form or Executable
+    Form must include a complete copy of this license, or a durable, public,
+    and reasonably direct link to the exact license text that applies to the
+    distributed version.
+
+3.3. Source Availability for Covered Software
+    If You distribute the Covered Software in Executable Form, including as a
+    static library, dynamic library, object file, or packaged dependency, You
+    must make the corresponding unmodified Source Code Form of the Covered
+    Software available by reasonable means. A durable public link to the
+    upstream repository and exact version is sufficient for unmodified copies.
+
+3.4. Package Managers and Distribution Channels
+    You may distribute unmodified Covered Software through package managers,
+    Linux or operating-system distributions, Docker or container images, vcpkg,
+    Conan, Homebrew, NuGet, and similar distribution systems, provided that You
+    preserve required notices, provide or link to this license, and make the
+    corresponding unmodified Source Code Form available as required by this
+    license.
+
+3.5. Larger Works
+    You may license Your own separate files in a Larger Work under terms of
+    Your choice, including proprietary terms, provided that those terms do not
+    limit, obscure, or contradict the rights, restrictions, notices, and
+    attribution requirements that apply to the Covered Software.
+
+3.6. No False Independence
+    You must not represent work that is copied from, adapted from, materially
+    derived from, or Substantially Informed By the Covered Software as
+    independently created.
+
+3.7. No Implied Endorsement
+    You must not imply that the Author endorses, sponsors, approves, maintains,
+    or collaborates on Your project, product, service, fork, port, derivative,
+    or Larger Work unless the Author has granted that permission in writing.
+
+3.8. Benchmarking and Evaluation
+    This license does not prohibit benchmarking, performance comparison,
+    academic evaluation, interoperability testing, or publication of benchmark
+    results, provided that the Covered Software is not used to create, improve,
+    test, document, or validate a Derivative Implementation.
+
+4. Human-Origin Attribution and Provenance
+------------------------------------------
+
+4.1. Attribution for Distributed Use
+    If You distribute the Covered Software, include it in a Larger Work, or make
+    a product or service available that contains or depends on the Covered
+    Software, You must provide visible attribution to the Author and the
+    original project in a README, documentation, third-party notices, or other
+    place where recipients normally review licensing and credits.
+
+4.2. Attribution for Derived or Substantially Informed Work
+    If the Covered Software materially informs any distributed work, including a
+    permitted Modification, permitted Derivative Implementation, port, wrapper,
+    API-compatible implementation, Substantially Similar Implementation, public
+    documentation, or public design, You must include Human-Origin Attribution
+    in the README or equivalent project documentation.
+
+4.3. About/Credits UI
+    If the distributed work has an About box, credits screen, acknowledgements
+    page, package metadata page, or comparable user-visible credit surface, You
+    must include attribution to the Author and original project there as well.
+
+4.4. Disclosure of Relationship to the Covered Software
+    Where attribution is required, You must state whether Your work is copied
+    from, adapted from, ported from, Substantially Informed By the Covered
+    Software, or AI-assisted using the Covered Software.
+
+4.5. No Hidden or Misleading Attribution
+    Minimal, hidden, misleading, machine-only, or source-header-only credit is
+    not enough when this license requires visible attribution. The attribution
+    must be reasonably discoverable by users, maintainers, reviewers, and
+    recipients without source archaeology.
+
+5. AI and Automated Implementation Mining
+-----------------------------------------
+
+5.1. No AI Cloning Without Permission
+    You may not perform AI-Assisted Implementation Mining without prior written
+    permission from the Author.
+
+5.2. Prohibited AI Uses
+    Without prior written permission from the Author, You may not use the
+    Covered Software as AI input, context, retrieval material, prompt material,
+    training data, fine-tuning data, evaluation data, or agent instructions for
+    the purpose of creating, improving, testing, documenting, or validating a
+    Derivative Implementation.
+
+5.3. No Evasion Through Transformation
+    The restriction in this Section applies even if the resulting work uses
+    different file names, symbols, namespaces, formatting, language, structure,
+    comments, documentation, branding, or repository history.
+
+5.4. Permitted Non-Clone Automation
+    This Section does not prohibit ordinary search, indexing, security
+    scanning, build analysis, static analysis, code review assistance, patch
+    review assistance, test generation, test review assistance, compiler
+    diagnostic explanation, documentation summarization, AI-generated tests for the Covered Software or
+    Contribution-Purpose Modifications, AI-assisted patch preparation for
+    Contribution-Purpose Modifications permitted by Section 2.4, or use of
+    applications built with unmodified Covered Software to expose unrelated
+    application data to AI agents, provided that such use is not for creating or
+    improving a Derivative Implementation, and is not for porting, rebranding,
+    replacing, or competing with the Covered Software.
+
+6. Manual Cloning, Porting, and Rebranding
+------------------------------------------
+
+6.1. No Manual Clone Without Permission
+    You may not manually copy, adapt, port, rebrand, restructure, or recreate
+    the Covered Software as a Derivative Implementation without prior written
+    permission from the Author.
+
+6.2. Substantial Implementation Influence
+    A work may be a Derivative Implementation even if it is not a literal copy,
+    if the Covered Software materially supplied the implementation structure,
+    API shape, behavior, architecture, examples, debugging path, or other
+    protected expression that made the new work possible. Access to the Covered
+    Software plus material reliance on protected implementation expression is
+    required; mere knowledge, public behavior, compatibility goals, or
+    high-level inspiration is not enough.
+
+6.3. High-Level Inspiration
+    This license does not claim ownership over general ideas, facts, public
+    behavior, abstract concepts, or independently created work. High-level
+    inspiration from public descriptions is not prohibited by itself. The
+    restricted boundary is implementation-level copying, adaptation, porting,
+    rebranding, cloning, or substantial implementation derivation.
+
+6.4. Independent Development
+    Nothing in this license prohibits Independent Development. Software that was
+    not copied from, materially derived from, or Substantially Informed By the
+    Covered Software is outside the Derivative Implementation restrictions of
+    this license.
+
+7. Contributions
+----------------
+
+7.1. Inbound License
+    By intentionally submitting a Contribution to the Covered Software, You
+    agree that the Contribution is licensed under this license unless the
+    Author agrees in writing to different terms.
+
+7.2. Representation
+    You represent that Your Contribution is Your original creation or that You
+    have sufficient rights to license it under this license.
+
+7.3. No Inconsistent Contributions
+    You must not submit material that is subject to terms inconsistent with this
+    license unless You clearly disclose those terms and the Author accepts them
+    in writing.
+
+8. Third-Party Materials
+------------------------
+
+This license applies only to Covered Software that identifies this license.
+Third-party dependencies, vendored libraries, public-domain components, and
+separately licensed files remain under their own licenses and notices. Nothing
+in this license attempts to relicense third-party material.
+
+9. Prior Versions
+-----------------
+
+This license does not alter rights already granted for prior versions of the
+Covered Software that were distributed under a different license. Those prior
+copies remain governed by the license terms under which recipients received
+them. This license governs Covered Software versions and files that identify
+this license.
+
+10. Termination
+---------------
+
+10.1. Immediate Breach and Termination
+    Except as provided in Section 10.2, if You fail to comply with any term of
+    this license, You are in immediate breach and all rights granted to You
+    under this license terminate automatically and immediately.
+
+10.2. Limited Cure for Accidental Notice and Packaging Breaches
+    If Your only breach is an accidental failure to preserve required notices,
+    include required license text, satisfy source-availability conditions for
+    permitted redistribution, or include required attribution in packaging or
+    documentation, termination will not take effect if You cure the breach
+    within 30 days after receiving written notice from the Author.
+
+    This cure period does not apply to cloning, AI-assisted implementation
+    mining, unauthorized Modifications, Derivative Implementations, divergent
+    forks, ports, rebrands, competing implementations, willful concealment,
+    plagiarism, or provenance misrepresentation. For those violations,
+    termination remains automatic and immediate under Section 10.1.
+
+    The Author may, at the Author's sole discretion, reinstate Your rights or
+    grant additional permission only in writing.
+
+10.3. Survival
+    Sections concerning attribution, provenance, AI restrictions, manual
+    cloning, no implied endorsement, warranty disclaimer, limitation of
+    liability, enforcement, and miscellaneous terms survive termination to the
+    maximum extent permitted by law.
+
+11. Disclaimer of Warranty
+--------------------------
+
+Covered Software is provided under this license on an "as is" basis, without
+warranty of any kind, either express, implied, or statutory, including without
+limitation warranties that the Covered Software is free of defects,
+merchantable, fit for a particular purpose, or non-infringing. The entire risk
+as to the quality and performance of the Covered Software is with You. Should
+any Covered Software prove defective in any respect, You assume the cost of any
+necessary servicing, repair, or correction. No use of any Covered Software is
+authorized under this license except under this disclaimer.
+
+12. Limitation of Liability
+---------------------------
+
+Under no circumstances and under no legal theory, whether tort, contract, or
+otherwise, shall any Contributor or distributor of Covered Software be liable to
+You for any direct, indirect, special, incidental, consequential, exemplary, or
+punitive damages of any character, including without limitation damages for lost
+profits, loss of goodwill, work stoppage, computer failure or malfunction, data
+loss, business interruption, or commercial damages or losses, even if such party
+has been informed of the possibility of such damages. This limitation applies
+to the maximum extent permitted by law.
+
+13. Enforcement and Forum
+-------------------------
+
+13.1. Court of Competent Jurisdiction
+    The Author may enforce this license in any court of competent jurisdiction.
+    Nothing in this license limits the Author's ability to seek injunctive
+    relief, damages, declaratory relief, or any other remedy available under
+    applicable law.
+
+13.2. Jurisdictional Contacts
+    You agree that making available, distributing, using, cloning, modifying,
+    mining, or deriving from the Covered Software in a jurisdiction may create
+    sufficient contacts for a court in that jurisdiction to hear claims related
+    to this license, to the maximum extent permitted by law.
+
+14. Miscellaneous
+-----------------
+
+14.1. Severability
+    If any provision of this license is held unenforceable, that provision
+    shall be reformed only to the extent necessary to make it enforceable, and
+    the remaining provisions shall remain in effect.
+
+14.2. No Waiver
+    Failure by the Author or any Contributor to enforce any provision of this
+    license is not a waiver of the right to enforce that provision later.
+
+14.3. Complete Terms
+    This license represents the complete public license terms for Covered
+    Software that identifies this license. No permission beyond this license is
+    granted unless the Author grants it in writing.
+
+14.4. License Versions
+    The Author may publish revised versions of this license. You may use the
+    Covered Software only under the version of this license identified in the
+    applicable Source Code Form or under a later version if the Author expressly
+    permits that later version for the Covered Software.
+
+15. Examples and FAQ
+--------------------
+
+This Section is explanatory guidance. It is intended to help interpret the
+license, but it does not expand or narrow the operative terms above. The
+examples below are illustrative and non-exhaustive. Similar conduct should be
+interpreted consistently with the operative provisions above.
+
+15.1. Examples of Generally Permitted Uses
+
+    You may generally do the following, subject to the full license terms:
+
+    (a) read, inspect, build, and evaluate the Covered Software;
+
+    (b) use unmodified Covered Software as a dependency in personal,
+        commercial, proprietary, or internal software;
+
+    (c) distribute unmodified Covered Software through package managers,
+        operating-system distributions, Docker or container images, vcpkg,
+        Conan, Homebrew, NuGet, or similar distribution systems;
+
+    (d) benchmark the Covered Software, compare performance, conduct academic
+        evaluation, test interoperability, and publish benchmark results;
+
+    (e) fork, branch, patch, or modify the Covered Software to prepare bug
+        fixes, optimizations, features, documentation improvements, tests, or
+        pull requests for contribution back to the upstream project;
+
+    (f) use ordinary development tools, search, indexing, static analysis,
+        security scanning, code review assistance, patch review assistance,
+        test generation, test review assistance, compiler diagnostic
+        explanation, documentation summarization,
+        AI-generated tests for the Covered Software or Contribution-Purpose
+        Modifications, and AI-assisted patch preparation for
+        Contribution-Purpose Modifications; and
+
+    (g) report bugs, propose changes, submit issues, submit patches, and submit
+        pull requests.
+
+15.2. Examples of Uses Requiring Prior Written Permission
+
+    The following uses are not granted by this public license and require prior
+    written permission from the Author:
+
+    (a) maintaining a divergent private or internal fork for operational,
+        production, commercial, or long-term use;
+
+    (b) publishing or maintaining an independent fork as a replacement project;
+
+    (c) porting the Covered Software to another programming language;
+
+    (d) creating an API-compatible replacement, behavioral clone, or competing
+        implementation;
+
+    (e) rebranding the Covered Software or a Derivative Implementation as a
+        separate product or project;
+
+    (f) using an AI System to rewrite, port, clone, rebrand, or recreate the
+        Covered Software as a Derivative Implementation; and
+
+    (g) using the Covered Software as implementation input to create or improve
+        a Derivative Implementation.
+
+15.3. Examples of Uses Outside the Restricted Boundary
+
+    The following are not restricted merely because they are similar at a high
+    level:
+
+    (a) independently creating software that provides similar abstract functionality without copying from, materially deriving
+        from, or being Substantially Informed By the Covered Software;
+
+    (b) learning general programming ideas, or public behavior
+        from documentation without using the Covered Software as an
+        implementation source; and
+
+    (c) using software built with unmodified Covered Software to expose
+        unrelated application data to AI agents.
+
+16. Source Code Form License Notice
+-----------------------------------
+
+Recommended SPDX notice for source files:
+
+    SPDX-License-Identifier: LicenseRef-Human-Origin-Source-1.0
+
+Recommended file header:
+
+    Copyright (c) [YEAR(S)] [AUTHOR NAME]
+    SPDX-License-Identifier: LicenseRef-Human-Origin-Source-1.0
+
+    This file is licensed under the Human-Origin Source License v1.0.
+    See LICENSE.

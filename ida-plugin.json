@@ -2,7 +2,7 @@
   "IDAMetadataDescriptorVersion": 1,
   "plugin": {
     "name": "QScripts",
-    "version": "1.2.6",
+    "version": "1.2.7",
     "entryPoint": "qscripts",
     "description": "Develop IDA scripts faster with hot-reload and automatic execution on file changes. Supports Python, IDC, and compiled plugins with dependency tracking.",
     "urls": {
@@ -18,12 +18,13 @@
       "api-scripting-and-automation",
       "collaboration-and-productivity"
     ],
-    "idaVersions": ">=9.0",
+    "idaVersions": ">=9.2",
     "platforms": [
       "windows-x86_64",
+      "windows-arm64",
       "linux-x86_64",
       "macos-aarch64"
     ],
-    "license": "MIT"
+    "license": "LicenseRef-Human-Origin-Source-1.0"
   }
 }

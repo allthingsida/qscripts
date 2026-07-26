@@ -9,3 +9,4 @@ x64/
 BINARIES/
 .claude/settings.local.json
 .claude/agents/ida-cmake.md
+.claude/

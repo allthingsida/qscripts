@@ -1,8 +1,14 @@
+# Copyright (c) 2019-2026 Elias Bachaalany
+# SPDX-License-Identifier: LicenseRef-Human-Origin-Source-1.0
+#
+# This file is licensed under the Human-Origin Source License v1.0.
+# See LICENSE.
+
 name: build
 
 on:
   push:
-    branches: ["**"]
+    branches: [main]
     tags: ["v*", "V*"]
   pull_request:
     branches: ["**"]
@@ -15,86 +21,151 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Every job builds with THIS repo's ida-cmake, installed at $IDASDK/ida-cmake
+# (cloned from allthingsida/ida-cmake), never the SDK's own src/cmake. The SDK is
+# pinned per IDA version so we generate artifacts for 9.2 / 9.3 / 9.4.
+
 jobs:
-  build-linux:
-    name: Build for Linux
-    runs-on: ubuntu-latest
+  build:
+    name: Build (${{ matrix.os }}, ${{ matrix.sdk }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [Linux, macOS, Windows]
+        sdk: [v9.2.0-sdk.1, v9.3.1-sdk.1, v9.4.0-release]
+        include:
+          - os: Linux
+            runner: ubuntu-latest
+            ext: so
+            arch: x64
+          - os: macOS
+            runner: macos-latest    # Apple Silicon (arm64)
+            ext: dylib
+            arch: arm64
+          - os: Windows
+            runner: windows-latest
+            ext: dll
+            arch: x64
     env:
       IDASDK: ${{ github.workspace }}/ida-sdk
     steps:
-      - name: Checkout project
+      - name: Checkout qscripts
         uses: actions/checkout@v4
 
-      - name: Prepare IDA SDK
-        run: git clone --depth 1 --recurse-submodules https://github.com/HexRaysSA/ida-sdk ida-sdk
+      - name: Setup IDA SDK (${{ matrix.sdk }}) + our ida-cmake
+        shell: bash
+        run: |
+          git clone --branch ${{ matrix.sdk }} --depth 1 https://github.com/HexRaysSA/ida-sdk ida-sdk
+          git clone --depth 1 https://github.com/allthingsida/ida-cmake "${IDASDK}/ida-cmake"
 
-      - name: Configure (Linux)
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Configure & build
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "Windows" ]; then
+            cmake -S . -B build -A x64
+            cmake --build build --config Release --parallel
+          else
+            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+            cmake --build build --parallel
+          fi
 
-      - name: Build (Linux)
-        run: cmake --build build -- -j2
+      - name: Stage artifact
+        shell: bash
+        run: |
+          mkdir -p out
+          cp "${IDASDK}/src/bin/plugins/qscripts.${{ matrix.ext }}" \
+             "out/qscripts-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.sdk }}.${{ matrix.ext }}"
+          ls -la out
 
-      - name: Upload Linux artifact (qscripts.so)
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: qscripts-linux
-          path: ${{ env.IDASDK }}/src/bin/plugins/qscripts.so
+          name: qscripts-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.sdk }}
+          path: out/*
 
-  build-macos:
-    name: Build for macOS
-    runs-on: macos-latest
+  # Native Windows-on-ARM build on a real ARM64 runner. ARM64 Windows libs exist only in SDK 9.4.
+  windows-arm64:
+    name: Build (Windows ARM64 native, v9.4.0-release)
+    runs-on: windows-11-arm
     env:
       IDASDK: ${{ github.workspace }}/ida-sdk
     steps:
-      - name: Checkout project
+      - name: Checkout qscripts
         uses: actions/checkout@v4
 
-      - name: Prepare IDA SDK
-        run: git clone --depth 1 --recurse-submodules https://github.com/HexRaysSA/ida-sdk ida-sdk
+      - name: Setup IDA SDK 9.4 + our ida-cmake
+        shell: bash
+        run: |
+          git clone --branch v9.4.0-release --depth 1 https://github.com/HexRaysSA/ida-sdk ida-sdk
+          git clone --depth 1 https://github.com/allthingsida/ida-cmake "${IDASDK}/ida-cmake"
 
-      - name: Configure (macOS)
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Configure & build (ARM64)
+        shell: bash
+        run: |
+          cmake -S . -B build -A ARM64
+          cmake --build build --config Release --parallel
 
-      - name: Build (macOS)
-        run: cmake --build build -- -j2
+      - name: Stage artifact
+        shell: bash
+        run: |
+          # Native build (host==target) deploys to the SDK plugins dir.
+          mkdir -p out
+          cp "${IDASDK}/src/bin/plugins/qscripts.dll" out/qscripts-Windows-arm64-v9.4.0-release.dll
+          ls -la out
 
-      - name: Upload macOS artifact (qscripts.dylib)
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: qscripts-macos
-          path: ${{ env.IDASDK }}/src/bin/plugins/qscripts.dylib
+          name: qscripts-Windows-arm64-v9.4.0-release
+          path: out/*
 
-  build-windows:
-    name: Build for Windows
-    runs-on: windows-latest
+  # Native Linux ARM64 build. arm64_linux libs ship in SDK 9.3.1-sdk.1 and later (not 9.2).
+  linux-arm64:
+    name: Build (Linux ARM64 native, ${{ matrix.sdk }})
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk: [v9.3.1-sdk.1, v9.4.0-release]
     env:
       IDASDK: ${{ github.workspace }}/ida-sdk
     steps:
-      - name: Checkout project
+      - name: Checkout qscripts
         uses: actions/checkout@v4
 
-      - name: Prepare IDA SDK
-        run: git clone --depth 1 --recurse-submodules https://github.com/HexRaysSA/ida-sdk ida-sdk
+      - name: Setup IDA SDK (${{ matrix.sdk }}) + our ida-cmake
+        shell: bash
+        run: |
+          git clone --branch ${{ matrix.sdk }} --depth 1 https://github.com/HexRaysSA/ida-sdk ida-sdk
+          git clone --depth 1 https://github.com/allthingsida/ida-cmake "${IDASDK}/ida-cmake"
 
-      - name: Configure (Windows)
-        run: cmake -S . -B build -A x64
+      - name: Configure & build
+        shell: bash
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel
 
-      - name: Build (Windows)
-        run: cmake --build build --config Release -- /m
+      - name: Stage artifact
+        shell: bash
+        run: |
+          mkdir -p out
+          cp "${IDASDK}/src/bin/plugins/qscripts.so" out/qscripts-Linux-arm64-${{ matrix.sdk }}.so
+          ls -la out
 
-      - name: Upload Windows artifact (qscripts.dll)
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: qscripts-windows
-          path: ${{ env.IDASDK }}/src/bin/plugins/qscripts.dll
+          name: qscripts-Linux-arm64-${{ matrix.sdk }}
+          path: out/*
 
   publish-release:
     name: Publish Release
     runs-on: ubuntu-latest
-    needs: [ build-linux, build-macos, build-windows ]
+    needs: [build, windows-arm64, linux-arm64]
     if: startsWith(github.ref, 'refs/tags/')
     steps:
-      - name: Checkout project
+      - name: Checkout qscripts
         uses: actions/checkout@v4
 
       - name: Download all artifacts
@@ -104,25 +175,15 @@ jobs:
           path: release
           merge-multiple: true
 
-      - name: Copy metadata to release folder
+      - name: Package release
         run: |
-          cp ida-plugin.json release/ || echo "No ida-plugin.json found"
-
-      - name: List release files
-        run: |
-          ls -la release || true
-
-      - name: Create zip package
-        run: |
+          cp ida-plugin.json release/ || echo "no ida-plugin.json"
           cd release
-          if [ -f ida-plugin.json ]; then
-            zip -9 qscripts-${{ github.ref_name }}.zip qscripts.dll qscripts.so qscripts.dylib ida-plugin.json
-          else
-            zip -9 qscripts-${{ github.ref_name }}.zip qscripts.dll qscripts.so qscripts.dylib
-          fi
+          ls -la
+          zip -9 qscripts-${{ github.ref_name }}.zip qscripts-* ida-plugin.json
           ls -lh *.zip
 
-      - name: Create GitHub Release and upload assets
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -132,7 +193,3 @@ jobs:
           generate_release_notes: true
           files: |
             release/qscripts-${{ github.ref_name }}.zip
-            release/qscripts.dll
-            release/qscripts.so
-            release/qscripts.dylib
-            release/ida-plugin.json

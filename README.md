@@ -357,9 +357,18 @@ Please check the native addons examples in [test_addons](test_addons/) for compl
 
 # Building
 
-QScripts uses [idacpp](https://github.com/allthingsida/idacpp) and is built using [ida-cmake](https://github.com/allthingsida/ida-cmake).
+QScripts is built with [ida-cmake](https://github.com/allthingsida/ida-cmake) and uses [idacpp](https://github.com/allthingsida/libidacpp).
 
-If you don't want to build from sources, then there are release pre-built for MS Windows.
+**Requirement:** install **ida-cmake** into your IDA SDK (`$IDASDK/ida-cmake`). See the [ida-cmake README](https://github.com/allthingsida/ida-cmake) for how to set that up — QScripts does not duplicate IDA SDK setup here. `idacpp` is resolved automatically: from your SDK (`$IDASDK/include/idacpp`) if present, otherwise fetched from [libidacpp](https://github.com/allthingsida/libidacpp) (or point at a local checkout with `-DIDACPP_PATH=<path>`).
+
+```bash
+cmake -B build
+cmake --build build --config Release
+```
+
+Supported IDA SDK versions: **9.2, 9.3, 9.4**. For Windows-on-ARM, cross-build with `cmake -B build -A ARM64` (requires SDK 9.4+).
+
+If you don't want to build from source, prebuilt binaries are on the releases page.
 
 # Installation
 
@@ -368,10 +377,14 @@ QScripts is written in C++ with IDA's SDK and therefore it should be deployed li
 * `<IDA_install_folder>/plugins`
 * `%APPDATA%\Hex-Rays/plugins`
 
-Since the plugin uses IDA's SDK and no other OS specific functions, the plugin should be compilable for macOS and Linux just fine. I only provide MS Windows binaries. Please check the [releases page](https://github.com/allthingsida/ida-qscripts/releases).
+Since the plugin uses IDA's SDK and no other OS-specific functions, it builds for Windows (x64 and ARM64), Linux, and macOS. Prebuilt binaries are on the [releases page](https://github.com/allthingsida/qscripts/releases).
 
 # BONUS
 
 ## Snippet Manager
 
 QScripts ships with a simple [Snippet Manager](snippet_manager/README.md) plugin to allow you to manage script snippets.
+
+# License
+
+QScripts is licensed under the **Human-Origin Source License v1.0** (source-available). See [`LICENSE`](LICENSE) and the per-file `SPDX-License-Identifier: LicenseRef-Human-Origin-Source-1.0` headers. Copyright (c) 2019-2026 Elias Bachaalany. (Previously MIT.)

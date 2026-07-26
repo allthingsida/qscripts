@@ -1,3 +1,9 @@
+# Copyright (c) 2019-2026 Elias Bachaalany
+# SPDX-License-Identifier: LicenseRef-Human-Origin-Source-1.0
+#
+# This file is licensed under the Human-Origin Source License v1.0.
+# See LICENSE.
+
 cmake_minimum_required(VERSION 3.27)
 project(qscripts)
 
@@ -5,23 +11,25 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Include IDA SDK bootstrap
-include($ENV{IDASDK}/src/cmake/bootstrap.cmake)
+# Include ida-cmake bootstrap. ida-cmake is installed alongside the SDK at
+# $IDASDK/ida-cmake (see the ida-cmake README). We use it directly rather than
+# the SDK's own src/cmake, which differs across SDK versions.
+include($ENV{IDASDK}/ida-cmake/bootstrap.cmake)
 find_package(idasdk REQUIRED)
 
-# Add idacpp library with fallback
-# First, try to use idacpp from IDASDK
-set(IDACPP_SDK_PATH "$ENV{IDASDK}/include/idacpp")
+# Resolve idacpp: optional local path (-DIDACPP_PATH) -> IDASDK -> FetchContent
+set(IDACPP_PATH "" CACHE PATH "Optional path to a local idacpp checkout")
+set(IDACPP_SDK_PATH   "$ENV{IDASDK}/include/idacpp")
 set(IDACPP_LOCAL_PATH "${CMAKE_CURRENT_BINARY_DIR}/idacpp")
 
-if(EXISTS "${IDACPP_SDK_PATH}/CMakeLists.txt")
+if(IDACPP_PATH AND EXISTS "${IDACPP_PATH}/CMakeLists.txt")
+    message(STATUS "Using idacpp from IDACPP_PATH: ${IDACPP_PATH}")
+    add_subdirectory(${IDACPP_PATH} ${CMAKE_CURRENT_BINARY_DIR}/idacpp)
+elseif(EXISTS "${IDACPP_SDK_PATH}/CMakeLists.txt")
     message(STATUS "Using idacpp from IDASDK: ${IDACPP_SDK_PATH}")
     add_subdirectory(${IDACPP_SDK_PATH} ${CMAKE_CURRENT_BINARY_DIR}/idacpp)
 else()
-    message(STATUS "idacpp not found in IDASDK, fetching to build directory...")
-
-    # Use FetchContent to download idacpp into build directory
-    # NOTE: The header-only idacpp wrapper is in the allthingsida/libidacpp repo
+    message(STATUS "Fetching idacpp from github.com/allthingsida/libidacpp...")
     include(FetchContent)
     FetchContent_Declare(
         idacpp
